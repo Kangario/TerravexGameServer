@@ -33,7 +33,20 @@ console.log("✅ Connected to Matchmaking Redis");
 
 /* ================= HTTP + WEBSOCKET ================= */
 
-const server = createServer();
+import http from "http";
+
+const server = http.createServer((req, res) => {
+    if (req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok" }));
+        return;
+    }
+
+    // дефолтный ответ
+    res.writeHead(200);
+    res.end("BattleServer is running");
+});
+
 const wss = new WebSocketServer({ server });
 
 /* ================= ACTIVE MATCHES ================= */
