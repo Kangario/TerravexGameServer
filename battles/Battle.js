@@ -1,3 +1,5 @@
+import { generateHeightMap } from 'GenerationTerrain/TerrainGenerator.js';
+
 export class Battle {
 
     constructor(match) {
@@ -15,14 +17,23 @@ export class Battle {
     // =========================
 
     createInitialState(match) {
-
-        const width = 10;
-        const height = 10;
-
+       
         const seed = Math.floor(Math.random() * 1000000);
+        
+        const width = 15;
+        const height = 40;
+        
 
         // --- Terrain ---
-        const terrainHeights = Array(width * height).fill(0);
+        const terrainHeights = Array.from(
+            generateHeightMap(width, height, {
+                scale: 10,
+                seed: seed,
+                octaves: 1,
+                persistence: 0.5,
+                lacunarity: 2.0
+            })
+        );
         const terrainTypes   = Array(width * height).fill(0);
 
         // --- Users ---
@@ -91,7 +102,7 @@ export class Battle {
             .map(u => u.UnitId);
 
         const firstUnitId = initiativeOrder[0];
-
+        
         return {
             MatchId: match.id,
             BattleVersion: 0,
