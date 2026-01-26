@@ -1,4 +1,4 @@
-import { mmRedis } from "../config/redis.js";
+import { gsRedis } from "../config/redis.js";
 import { BattleFactory } from "./BattleFactory.js";
 
 const activeBattles = new Map(); // matchId -> Battle
@@ -8,8 +8,8 @@ export const BattleManager = {
     async handleJoin(ws, msg) {
         const { matchId, userId } = msg;
 
-        const matchKey = `mm:match:${matchId.split(":").pop()}`;
-        const matchData = await mmRedis.get(matchKey);
+        const matchKey = `gs:match:${matchId}`;
+        const matchData = await gsRedis.get(matchKey);
 
         if (!matchData) {
             ws.send(JSON.stringify({ type: "error", message: "match not found" }));
