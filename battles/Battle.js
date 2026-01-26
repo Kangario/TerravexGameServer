@@ -1,4 +1,4 @@
-import { generateHeightMap } from 'GenerationTerrain/TerrainGenerator.js';
+import { generateHeightMap } from '../GenerationTerrain/TerrainGenerator.js';
 
 export class Battle {
 
