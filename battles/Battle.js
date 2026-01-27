@@ -2,10 +2,11 @@ import { generateHeightMap } from '../GenerationTerrain/TerrainGenerator.js';
 
 export class Battle {
 
-    constructor(match) {
+    constructor(match, battleCharacters) {
         this.matchId = match.id;
         this.players = new Map();
-
+        this.battleCharacters = battleCharacters;
+        
         this.battleVersion = 0;
         this.eventIndex = 0;
 
@@ -17,7 +18,7 @@ export class Battle {
     // =========================
 
     createInitialState(match) {
-       
+        
         const seed = Math.floor(Math.random() * 1000000);
         
         const width = 15;
@@ -48,33 +49,35 @@ export class Battle {
         const units = {};
         const unitGrid = Array(width * height).fill(-1);
 
-        function spawnUnit(playerId, teamId, ownerIndex, x, y) {
+        function spawnUnitFromCharacter(char, teamId, x, y) {
+
             const id = nextUnitId++;
 
             const unit = {
                 UnitId: id,
-                HeroInstanceId: `hero_${id}`,
-                PlayerId: playerId,
+
+                HeroInstanceId: char.HeroInstanceId,
+                HeroId: char.HeroId,
+
+                PlayerId: char.PlayerId,
                 TeamId: teamId,
-                OwnerPlayerIndex: ownerIndex,
 
-                x: x,
-                y: y,
+                x, y,
 
-                Hp: 100,
-                MaxHp: 100,
+                Hp: char.Hp,
+                MaxHp: char.MaxHp,
 
                 AP: 0,
                 MaxAP: 4,
 
-                PhysicalDamage: 20,
-                MagicDamage: 0,
+                PhysicalDamage: char.PhysicalDamage,
+                MagicDamage: char.MagicDamage,
 
-                PhysicalProtection: 5,
-                MagicProtection: 2,
+                PhysicalProtection: char.PhysicalProtection,
+                MagicProtection: char.MagicProtection,
 
-                Speed: 5,
-                AttackSpeed: 5,
+                Speed: char.Speed,
+                AttackSpeed: char.AttackSpeed,
 
                 Initiative: Math.floor(Math.random() * 20) + 1,
 
@@ -86,15 +89,63 @@ export class Battle {
             unitGrid[y * width + x] = id;
         }
 
-        const p0 = match.players[0].userId;
-        const p1 = match.players[1].userId;
+        function spawnHorizontalLine(char, teamId, startX, stepX) {
 
-        // Спавн
-        spawnUnit(p0, 0, 0, 1, 1);
-        spawnUnit(p0, 0, 0, 1, 3);
+            // 🔹 Определяем линию по команде
+            const y = (teamId === 1) ? 1 : height - 2;
 
-        spawnUnit(p1, 1, 1, 8, 8);
-        spawnUnit(p1, 1, 1, 8, 6);
+            let x = startX;
+
+                // защита от выхода за карту
+                if (x < 0 || x >= width) {
+                    throw new Error("Spawn line out of bounds");
+                }
+
+                // ищем свободную клетку вправо
+                let placed = false;
+                let tryX = x;
+
+                while (tryX < width) {
+                    const index = y * width + tryX;
+
+                    if (unitGrid[index] === -1) {
+                        spawnUnitFromCharacter(char, teamId, tryX, y);
+                        placed = true;
+                        x = tryX + stepX;
+                        break;
+                    }
+
+                    tryX++;
+                }
+
+                if (!placed) {
+                    throw new Error("No space to spawn unit in horizontal line");
+                }
+            
+        }
+
+        
+        const stepX = 2;
+        
+        
+
+        for (let users = 0; users<userStates.length; users++) {
+            let localIndex = 3; 
+            for (let i = 0; i < this.battleCharacters.length; i++) {
+
+            const char = this.battleCharacters[i];
+            if (char.PlayerId === userStates[users].PlayerId) {
+            spawnHorizontalLine(
+                char,
+                users,
+                localIndex,
+                stepX
+            );
+            }
+            localIndex++;
+        }
+        }
+       
 
         // --- Initiative ---
         const initiativeOrder = Object.values(units)

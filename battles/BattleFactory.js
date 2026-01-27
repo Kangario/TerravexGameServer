@@ -2,10 +2,10 @@ import { Battle } from "./Battle.js";
 
 export const BattleFactory = {
 
-    create(match) {
+    create(match, battleCharacters) {
         console.log("🛠 Creating battle for match", match.id);
 
-        const battle = new Battle(match);
+        const battle = new Battle(match, battleCharacters);
 
         return battle;
     }

@@ -1,4 +1,4 @@
-import { gsRedis } from "../config/redis.js";
+import { gsRedis, userRedis  } from "../config/redis.js";
 import { BattleFactory } from "./BattleFactory.js";
 
 const activeBattles = new Map(); // matchId -> Battle
@@ -21,7 +21,9 @@ export const BattleManager = {
         let battle = activeBattles.get(match.id);
 
         if (!battle) {
-            battle = BattleFactory.create(match);
+            const battleCharacters = await loadBattleCharacters(match);
+            
+            battle = BattleFactory.create(match, battleCharacters);
             activeBattles.set(match.id, battle);
         }
 
@@ -52,3 +54,51 @@ export const BattleManager = {
         battle.handleDisconnect(ws.userId);
     }
 };
+
+async function loadBattleCharacters(match) {
+
+    const result = [];
+
+    for (const p of match.players) {
+
+        const raw = await userRedis.get(`user:${p.userId}`);
+        if (!raw) throw new Error("User not found " + p.userId);
+
+        const user = JSON.parse(raw);
+        
+        if (!user.equipmentHeroes || user.equipmentHeroes.length === 0) {
+            throw new Error("User has no equipped heroes " + p.userId);
+        }
+        
+        const hero = user.equipmentHeroes[0];
+        
+        const battleCharacter = {
+            PlayerId: user.userId,
+            Username: user.username,
+
+            HeroInstanceId: hero.InstanceId,
+            HeroId: hero.Id,
+            Name: hero.Name,
+            TypeClass: hero.TypeClass,
+
+            Level: hero.Lvl,
+            Xp: hero.Xp,
+            
+            MaxHp: hero.Hp,
+            Hp: hero.Hp,
+
+            PhysicalDamage: hero.DamageP,
+            MagicDamage: hero.DamageM,
+
+            PhysicalProtection: hero.DefenceP,
+            MagicProtection: hero.DefenceM,
+
+            Speed: hero.Speed,
+            AttackSpeed: hero.AttackSpeed
+        };
+
+        result.push(battleCharacter);
+    }
+
+    return result;
+}
