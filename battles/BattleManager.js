@@ -65,39 +65,41 @@ async function loadBattleCharacters(match) {
         if (!raw) throw new Error("User not found " + p.userId);
 
         const user = JSON.parse(raw);
-        
+
         if (!user.equipmentHeroes || user.equipmentHeroes.length === 0) {
             throw new Error("User has no equipped heroes " + p.userId);
         }
-        
-        const hero = user.equipmentHeroes[0];
-        
-        const battleCharacter = {
-            PlayerId: user.userId,
-            Username: user.username,
 
-            HeroInstanceId: hero.InstanceId,
-            HeroId: hero.Id,
-            Name: hero.Name,
-            TypeClass: hero.TypeClass,
+        // 🔹 Берём ВСЕХ экипированных героев игрока
+        for (const hero of user.equipmentHeroes) {
 
-            Level: hero.Lvl,
-            Xp: hero.Xp,
-            
-            MaxHp: hero.Hp,
-            Hp: hero.Hp,
+            const battleCharacter = {
+                PlayerId: user.userId,
+                Username: user.username,
 
-            PhysicalDamage: hero.DamageP,
-            MagicDamage: hero.DamageM,
+                HeroInstanceId: hero.InstanceId,
+                HeroId: hero.Id,
+                Name: hero.Name,
+                TypeClass: hero.TypeClass,
 
-            PhysicalProtection: hero.DefenceP,
-            MagicProtection: hero.DefenceM,
+                Level: hero.Lvl,
+                Xp: hero.Xp,
 
-            Speed: hero.Speed,
-            AttackSpeed: hero.AttackSpeed
-        };
+                MaxHp: hero.Hp,
+                Hp: hero.Hp,
 
-        result.push(battleCharacter);
+                PhysicalDamage: hero.DamageP,
+                MagicDamage: hero.DamageM,
+
+                PhysicalProtection: hero.DefenceP,
+                MagicProtection: hero.DefenceM,
+
+                Speed: hero.Speed,
+                AttackSpeed: hero.AttackSpeed
+            };
+
+            result.push(battleCharacter);
+        }
     }
 
     return result;
