@@ -31,7 +31,7 @@
             }
 
             const index = y * width + x;
-            result[index] = Math.round(value * 100);
+            result[index] = value;
 
             if (value < min) min = value;
             if (value > max) max = value;
@@ -41,7 +41,8 @@
     // Нормализация в диапазон [0,1]
     const range = max - min;
     for (let i = 0; i < result.length; i++) {
-        result[i] = (result[i] - min) / range;
+        let normilize = (result[i] - min) / range;
+        result[i] = Math.round(normilize * 99);
     }
 
     return result;
