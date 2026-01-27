@@ -1,8 +1,8 @@
 ﻿export function generateHeightMap(width, height, options = {}) {
     const {
-        scale = 10.0,     
+        scale = 100,     
         seed = 1337,
-        octaves = 1,
+        octaves = 4,
         persistence = 0.5,
         lacunarity = 2.0
     } = options;
