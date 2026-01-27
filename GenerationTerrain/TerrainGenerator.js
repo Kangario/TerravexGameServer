@@ -31,7 +31,7 @@
             }
 
             const index = y * width + x;
-            result[index] = value;
+            result[index] = Math.round(value * 100);
 
             if (value < min) min = value;
             if (value > max) max = value;
