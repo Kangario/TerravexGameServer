@@ -95,7 +95,9 @@ async function loadBattleCharacters(match) {
                 MagicProtection: hero.DefenceM,
 
                 Speed: hero.Speed,
-                AttackSpeed: hero.AttackSpeed
+                AttackSpeed: hero.AttackSpeed,
+
+                Initiative: Math.floor(Math.random()*20)
             };
 
             result.push(battleCharacter);

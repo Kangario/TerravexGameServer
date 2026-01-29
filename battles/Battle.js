@@ -74,7 +74,7 @@ export class Battle {
                 Speed: char.Speed,
                 AttackSpeed: char.AttackSpeed,
 
-                Initiative: Math.floor(Math.random() * 20) + 1,
+                Initiative: char.Initiative,
 
                 Facing: 0,
                 IsDead: false
