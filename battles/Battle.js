@@ -13,10 +13,6 @@ export class Battle {
         this.state = this.createInitialState(match);
     }
 
-    // =========================
-    // СОЗДАНИЕ НАЧАЛЬНОГО STATE
-    // =========================
-
     createInitialState(match) {
         
         const seed = Math.floor(Math.random() * 1000000);
@@ -24,8 +20,7 @@ export class Battle {
         const width = 15;
         const height = 40;
         
-
-        // --- Terrain ---
+        
         const terrainHeights = Array.from(
             generateHeightMap(width, height, {
                 scale: 10,
@@ -36,15 +31,13 @@ export class Battle {
             })
         );
         const terrainTypes   = Array(width * height).fill(0);
-
-        // --- Users ---
+        
         const userStates = match.players.map((p, index) => ({
             PlayerId: p.userId,
             TeamId: index,
             Connected: true
         }));
-
-        // --- Units ---
+        
         let nextUnitId = 1;
         const units = {};
         const unitGrid = Array(width * height).fill(-1);
@@ -61,7 +54,9 @@ export class Battle {
 
                 PlayerId: char.PlayerId,
                 TeamId: teamId,
-
+                
+                Class: char.TypeClass,
+                
                 x, y,
 
                 Hp: char.Hp,
@@ -90,18 +85,15 @@ export class Battle {
         }
 
         function spawnHorizontalLine(char, teamId, startX, stepX) {
-
-            // 🔹 Определяем линию по команде
+            
             const y = (teamId === 1) ? 1 : height - 2;
 
             let x = startX;
 
-                // защита от выхода за карту
                 if (x < 0 || x >= width) {
                     throw new Error("Spawn line out of bounds");
                 }
-
-                // ищем свободную клетку вправо
+                
                 let placed = false;
                 let tryX = x;
 
@@ -146,8 +138,7 @@ export class Battle {
         }
         }
        
-
-        // --- Initiative ---
+        
         const initiativeOrder = Object.values(units)
             .sort((a, b) => b.Initiative - a.Initiative)
             .map(u => u.UnitId);
@@ -175,16 +166,12 @@ export class Battle {
             CurrentUnitId: firstUnitId,
             TurnNumber: 1,
 
-            CurrentPhase: 3, // TurnStart
+            CurrentPhase: 3,
 
             bBattleFinished: false,
             WinnerTeamId: -1
         };
     }
-
-    // =========================
-    // ПОДКЛЮЧЕНИЕ И СТАРТ БОЯ
-    // =========================
 
     addPlayer(userId, ws) {
         this.players.set(userId, ws);
@@ -205,17 +192,12 @@ export class Battle {
         this.broadcast(battleInit);
         console.log("🚀 Battle started", this.matchId);
     }
-
-    // =========================
-    // ОБРАБОТКА ХОДА ИГРОКА
-    // =========================
-
+    
     handleAction(userId, msg) {
 
         const state = this.state;
         const unit = state.Units[msg.unitId];
-
-        // --- Проверки ---
+        
         if (!unit || unit.IsDead) {
             console.log("❌ Invalid unit");
             return;
@@ -232,14 +214,11 @@ export class Battle {
         }
 
         let events = [];
-
-        // даём AP на ход
+        
         unit.AP = unit.MaxAP;
-
-        // --- Действия ---
+        
         for (const act of msg.actions) {
-
-            // MOVE
+            
             if (act.type === "move") {
                 const last = act.path[act.path.length - 1];
                 const nx = last[0];
@@ -260,8 +239,7 @@ export class Battle {
 
                 unit.AP -= 1;
             }
-
-            // ATTACK
+            
             if (act.type === "attack") {
                 const target = state.Units[act.targetUnitId];
                 if (!target || target.IsDead) continue;
@@ -290,8 +268,7 @@ export class Battle {
                 unit.AP -= 2;
             }
         }
-
-        // --- Следующий ход ---
+        
         state.TurnIndex++;
         const nextIndex = state.TurnIndex % state.InitiativeOrder.length;
         const nextUnitId = state.InitiativeOrder[nextIndex];
@@ -301,15 +278,13 @@ export class Battle {
 
         const nextUnit = state.Units[nextUnitId];
 
-        events.push(this.makeEvent(4, {   // TurnStart
+        events.push(this.makeEvent(4, {
             UnitId: nextUnitId,
             Value: nextUnit.MaxAP
         }));
-
-        // --- Версии ---
+        
         this.battleVersion++;
-
-        // --- Отправка ---
+        
         this.broadcast({
             type: "turn_result",
             battleVersion: this.battleVersion,
@@ -323,11 +298,7 @@ export class Battle {
             }
         });
     }
-
-    // =========================
-    // EVENT FACTORY
-    // =========================
-
+    
     makeEvent(type, data) {
         return {
             EventIndex: ++this.eventIndex,
@@ -342,10 +313,6 @@ export class Battle {
             Extra: data.Extra ?? 0
         };
     }
-
-    // =========================
-    // NETWORK
-    // =========================
 
     handleReconnect(ws, userId) {
         this.players.set(userId, ws);
