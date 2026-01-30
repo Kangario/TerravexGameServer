@@ -1,339 +1,36 @@
-import { generateHeightMap } from '../GenerationTerrain/TerrainGenerator.js';
-
 export class Battle {
 
-    constructor(match, battleCharacters) {
-        this.matchId = match.id;
+    constructor(match, characters) {
+
         this.players = new Map();
-        this.battleCharacters = battleCharacters;
-        
         this.battleVersion = 0;
         this.eventIndex = 0;
 
-        this.state = this.createInitialState(match);
-    }
+        this.state = new BattleState(createInitialState(match, characters));
 
-    createInitialState(match) {
-        
-        const seed = Math.floor(Math.random() * 1000000);
-        
-        const width = 15;
-        const height = 40;
-        
-        
-        const terrainHeights = Array.from(
-            generateHeightMap(width, height, {
-                scale: 10,
-                seed: seed,
-                octaves: 1,
-                persistence: 0.5,
-                lacunarity: 2.0
-            })
-        );
-        const terrainTypes   = Array(width * height).fill(0);
-        
-        const userStates = match.players.map((p, index) => ({
-            PlayerId: p.userId,
-            TeamId: index,
-            Connected: true
-        }));
-        
-        let nextUnitId = 1;
-        const units = {};
-        const unitGrid = Array(width * height).fill(-1);
-
-        function spawnUnitFromCharacter(char, teamId, x, y) {
-
-            const id = nextUnitId++;
-
-            const unit = {
-                UnitId: id,
-
-                HeroInstanceId: char.HeroInstanceId,
-                HeroId: char.HeroId,
-
-                PlayerId: char.PlayerId,
-                TeamId: teamId,
-                
-                Class: char.TypeClass,
-                
-                x, y,
-
-                Hp: char.Hp,
-                MaxHp: char.MaxHp,
-
-                AP: 0,
-                MaxAP: 4,
-
-                PhysicalDamage: char.PhysicalDamage,
-                MagicDamage: char.MagicDamage,
-
-                PhysicalProtection: char.PhysicalProtection,
-                MagicProtection: char.MagicProtection,
-
-                Speed: char.Speed,
-                AttackSpeed: char.AttackSpeed,
-
-                Initiative: char.Initiative,
-
-                Facing: 0,
-                IsDead: false
-            };
-
-            units[id] = unit;
-            unitGrid[y * width + x] = id;
-        }
-
-        function spawnHorizontalLine(char, teamId, startX, stepX) {
-            
-            const y = (teamId === 1) ? 1 : height - 2;
-
-            let x = startX;
-
-                if (x < 0 || x >= width) {
-                    throw new Error("Spawn line out of bounds");
-                }
-                
-                let placed = false;
-                let tryX = x;
-
-                while (tryX < width) {
-                    const index = y * width + tryX;
-
-                    if (unitGrid[index] === -1) {
-                        spawnUnitFromCharacter(char, teamId, tryX, y);
-                        placed = true;
-                        x = tryX + stepX;
-                        break;
-                    }
-
-                    tryX++;
-                }
-
-                if (!placed) {
-                    throw new Error("No space to spawn unit in horizontal line");
-                }
-            
-        }
-
-        
-        const stepX = 2;
-        
-        
-
-        for (let users = 0; users<userStates.length; users++) {
-            let localIndex = 3; 
-            for (let i = 0; i < this.battleCharacters.length; i++) {
-
-            const char = this.battleCharacters[i];
-            if (char.PlayerId === userStates[users].PlayerId) {
-            spawnHorizontalLine(
-                char,
-                users,
-                localIndex,
-                stepX
-            );
-            }
-            localIndex++;
-        }
-        }
-       
-        
-        const initiativeOrder = Object.values(units)
-            .sort((a, b) => b.Initiative - a.Initiative)
-            .map(u => u.UnitId);
-
-        const firstUnitId = initiativeOrder[0];
-        
-        return {
-            MatchId: match.id,
-            BattleVersion: 0,
-            Seed: seed,
-
-            Width: width,
-            Height: height,
-
-            TerrainHeights: terrainHeights,
-            TerrainTypes: terrainTypes,
-
-            UserStates: userStates,
-
-            Units: units,
-            UnitGrid: unitGrid,
-
-            InitiativeOrder: initiativeOrder,
-            TurnIndex: 0,
-            CurrentUnitId: firstUnitId,
-            TurnNumber: 1,
-
-            CurrentPhase: 3,
-
-            bBattleFinished: false,
-            WinnerTeamId: -1
-        };
-    }
-
-    addPlayer(userId, ws) {
-        this.players.set(userId, ws);
-
-        if (this.players.size === 2) {
-            this.start();
-        }
+        this.phase = new BattlePhaseController(this);
+        this.turns = new TurnController(this);
+        this.events = new EventFactory(this);
+        this.broadcast = new BattleBroadcaster(this).send;
     }
 
     start() {
-        const battleInit = {
-            type: "battle_init",
-            battleVersion: this.battleVersion,
-            eventIndex: this.eventIndex,
-            state: this.state
-        };
-
-        this.broadcast(battleInit);
-        console.log("🚀 Battle started", this.matchId);
+        this.phase.setPhase(EBattlePhase.Initializing);
+        this.broadcast({ type: "battle_init", state: this.state });
+        this.turns.beginTurn();
     }
-    
+
     handleAction(userId, msg) {
 
-        const state = this.state;
-        const unit = state.Units[msg.unitId];
-        
-        if (!unit || unit.IsDead) {
-            console.log("❌ Invalid unit");
-            return;
-        }
+        const error = BattleValidator.canAct(this, userId, msg.unitId);
+        if (error) return;
 
-        if (state.CurrentUnitId !== unit.UnitId) {
-            console.log("❌ Not this unit's turn");
-            return;
-        }
+        const unit = this.state.getCurrentUnit();
+        const events = ActionProcessor.process(this, unit, msg.actions);
 
-        if (unit.PlayerId !== userId) {
-            console.log("❌ Player not owner");
-            return;
-        }
+        this.phase.setPhase(EBattlePhase.Simulating);
+        this.broadcast({ type: "turn_result", events });
 
-        let events = [];
-        
-        unit.AP = unit.MaxAP;
-        
-        for (const act of msg.actions) {
-            
-            if (act.type === "move") {
-                const last = act.path[act.path.length - 1];
-                const nx = last[0];
-                const ny = last[1];
-
-                events.push(this.makeEvent(0, {
-                    UnitId: unit.UnitId,
-                    FromX: unit.x,
-                    FromY: unit.y,
-                    ToX: nx,
-                    ToY: ny
-                }));
-
-                state.UnitGrid[unit.y * state.Width + unit.x] = -1;
-                unit.x = nx;
-                unit.y = ny;
-                state.UnitGrid[ny * state.Width + nx] = unit.UnitId;
-
-                unit.AP -= 1;
-            }
-            
-            if (act.type === "attack") {
-                const target = state.Units[act.targetUnitId];
-                if (!target || target.IsDead) continue;
-
-                events.push(this.makeEvent(1, {
-                    UnitId: unit.UnitId,
-                    TargetUnitId: target.UnitId
-                }));
-
-                const damage = unit.PhysicalDamage;
-                target.Hp -= damage;
-
-                events.push(this.makeEvent(2, {
-                    UnitId: target.UnitId,
-                    Value: damage
-                }));
-
-                if (target.Hp <= 0) {
-                    target.IsDead = true;
-
-                    events.push(this.makeEvent(6, {
-                        UnitId: target.UnitId
-                    }));
-                }
-
-                unit.AP -= 2;
-            }
-        }
-        
-        state.TurnIndex++;
-        const nextIndex = state.TurnIndex % state.InitiativeOrder.length;
-        const nextUnitId = state.InitiativeOrder[nextIndex];
-
-        state.CurrentUnitId = nextUnitId;
-        state.TurnNumber++;
-
-        const nextUnit = state.Units[nextUnitId];
-
-        events.push(this.makeEvent(4, {
-            UnitId: nextUnitId,
-            Value: nextUnit.MaxAP
-        }));
-        
-        this.battleVersion++;
-        
-        this.broadcast({
-            type: "turn_result",
-            battleVersion: this.battleVersion,
-            eventIndex: this.eventIndex,
-            events: events,
-            statePatch: {
-                CurrentUnitId: nextUnitId,
-                TurnIndex: state.TurnIndex,
-                TurnNumber: state.TurnNumber,
-                CurrentPhase: 3
-            }
-        });
-    }
-    
-    makeEvent(type, data) {
-        return {
-            EventIndex: ++this.eventIndex,
-            Type: type,
-            UnitId: data.UnitId ?? -1,
-            TargetUnitId: data.TargetUnitId ?? -1,
-            FromX: data.FromX ?? -1,
-            FromY: data.FromY ?? -1,
-            ToX: data.ToX ?? -1,
-            ToY: data.ToY ?? -1,
-            Value: data.Value ?? 0,
-            Extra: data.Extra ?? 0
-        };
-    }
-
-    handleReconnect(ws, userId) {
-        this.players.set(userId, ws);
-
-        ws.send(JSON.stringify({
-            type: "battle_init",
-            battleVersion: this.battleVersion,
-            eventIndex: this.eventIndex,
-            state: this.state
-        }));
-    }
-
-    handleDisconnect(userId) {
-        this.players.delete(userId);
-        console.log("🔴 Player left battle", userId);
-    }
-
-    broadcast(msg) {
-        const json = JSON.stringify(msg);
-        for (const ws of this.players.values()) {
-            ws.send(json);
-        }
+        this.turns.endTurn();
     }
 }

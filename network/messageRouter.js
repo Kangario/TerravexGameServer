@@ -8,7 +8,7 @@ export const messageRouter = {
                 await BattleManager.handleJoin(ws, msg);
                 break;
 
-            case "player_action":
+            case "turn_actions":
                 BattleManager.handleAction(ws, msg);
                 break;
 
