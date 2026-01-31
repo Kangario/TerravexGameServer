@@ -5,17 +5,13 @@
         this.seed = seed;
         this.terrain = terrain;
         this.units = units;
-
-        // 🔒 делаем snapshot immutable
+        
         Object.freeze(this.terrain);
         this.units.forEach(u => Object.freeze(u));
         Object.freeze(this.units);
         Object.freeze(this);
     }
-
-    // =========================
-    // FACTORY
-    // =========================
+    
     static create({ matchId, seed, terrain, units }) {
 
         if (!matchId) throw new Error("BattleSnapshot: matchId required");
@@ -30,10 +26,7 @@
             units
         });
     }
-
-    // =========================
-    // SERIALIZATION
-    // =========================
+    
     toJSON() {
         return {
             matchId: this.matchId,

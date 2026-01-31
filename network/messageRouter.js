@@ -9,7 +9,7 @@ export const messageRouter = {
                 break;
 
             case "turn_actions":
-                BattleManager.handleAction(ws, msg);
+                BattleManager.handleTurnActions(ws, msg);
                 break;
 
             case "reconnect":

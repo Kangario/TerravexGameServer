@@ -1,3 +1,6 @@
+import { loadBattleSnapshot } from "./loadBattleSnapshot.js";
+import { BattleFactory } from "./BattleFactory.js";
+
 const activeBattles = new Map(); // matchId -> Battle
 
 export const BattleManager = {

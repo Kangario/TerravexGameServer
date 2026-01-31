@@ -5,5 +5,11 @@
   "dependencies": {
     "redis": "^5.10.0",
     "ws": "^8.19.0"
+  },
+  "scripts": {
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0"
   }
 }

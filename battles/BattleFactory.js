@@ -1,5 +1,5 @@
-import { Battle } from "./Battle.js";
-import { TerrainGenerator } from "./terrain/TerrainGenerator.js";
+import { Battle } from "./BattleSession.js";
+import { TerrainGenerator } from "../GenerationTerrain/TerrainGenerator.js";
 import { BattleSnapshot } from "./BattleSnapshot.js";
 
 export const BattleFactory = {
