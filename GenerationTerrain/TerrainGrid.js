@@ -7,10 +7,7 @@ export class TerrainGrid {
         this.height = height;
         this.heights = heights; // Int array
         this.types = types;     // Enum / int array
-
-        Object.freeze(this.heights);
-        Object.freeze(this.types);
-        Object.freeze(this);
+        
     }
 
     index(x, y) {
