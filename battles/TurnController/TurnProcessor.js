@@ -1,6 +1,6 @@
 ﻿// battles/turn/TurnProcessor.js
 
-import { ActionFactory } from "./actions/ActionFactory.js";
+import { ActionFactory } from "../Actions/ActionFactory.js";
 
 export class TurnProcessor {
 

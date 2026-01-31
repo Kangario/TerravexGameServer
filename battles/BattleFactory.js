@@ -1,4 +1,4 @@
-import { Battle } from "./BattleSession.js";
+import { BattleSession } from "./BattleSession.js";
 import { TerrainGenerator } from "../GenerationTerrain/TerrainGenerator.js";
 import { BattleSnapshot } from "./BattleSnapshot.js";
 
@@ -23,7 +23,7 @@ export const BattleFactory = {
         });
 
         // 4️⃣ battle session
-        return new Battle(snapshot);
+        return new BattleSession(snapshot);
     },
 
     generateSeed(match) {

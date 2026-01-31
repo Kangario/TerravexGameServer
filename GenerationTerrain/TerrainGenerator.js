@@ -1,7 +1,7 @@
 ﻿// battles/terrain/TerrainGenerator.js
 
 import { TerrainGrid } from "./TerrainGrid.js";
-import { generateHeightMap } from "./noise/heightMap.js";
+import { generateHeightMap } from "./heightMap.js";
 
 export const TerrainGenerator = {
 
