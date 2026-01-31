@@ -31,6 +31,8 @@ export async function loadBattleSnapshot(matchId) {
 
         const match = JSON.parse(raw);
 
+        log("Full Json", JSON.stringify(match));
+        
         log("Parsed match", {
             seed: match.seed,
             unitsCount: match.units?.length || 0
