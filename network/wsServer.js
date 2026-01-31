@@ -2,6 +2,7 @@ import { WebSocketServer } from "ws";
 import { messageRouter } from "./messageRouter.js";
 
 export function initWSServer(server) {
+    console.log("🟢 Init WS Server");
     const wss = new WebSocketServer({ server });
 
     wss.on("connection", (ws) => {
