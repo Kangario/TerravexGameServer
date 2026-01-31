@@ -5,11 +5,6 @@
         this.seed = seed;
         this.terrain = terrain;
         this.units = units;
-        
-        Object.freeze(this.terrain);
-        this.units.forEach(u => Object.freeze(u));
-        Object.freeze(this.units);
-        Object.freeze(this);
     }
     
     static create({ matchId, seed, terrain, units }) {
