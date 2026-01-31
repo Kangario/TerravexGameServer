@@ -1,4 +1,4 @@
-import { loadBattleSnapshot } from "./loadBattleSnapshot.js";
+import { loadBattleSnapshot } from "./LoadBattleSnapshot.js";
 import { BattleFactory } from "./BattleFactory.js";
 
 const activeBattles = new Map(); // matchId -> Battle
