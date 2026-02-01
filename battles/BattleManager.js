@@ -26,10 +26,7 @@ export const BattleManager = {
             log("Loading snapshot:", matchId);
             const snapshot = await loadBattleSnapshot(matchId);
             log("Snapshot loaded:", matchId);
-
-            battle = BattleFactory.create(matchId, snapshot.units);
-            log("Battle created:", matchId);
-
+            
             battle.onFinished(() => {
                 log("Battle finished → removing:", matchId);
                 activeBattles.delete(matchId);
