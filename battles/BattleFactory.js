@@ -34,16 +34,21 @@ export const BattleFactory = {
         return characters.map(c => ({
             id: c.id,
             team: c.team,
-            stats: {
-                hp: c.hp,
-                ap: c.ap,
-                initiative: c.initiative,
-                attack: c.attack,
-                defense: c.defense
-            },
+            name: c.name,
+            class: c.class,
+            hp: c.hp,
+            maxHp: c.maxHp,
+            ap: c.ap,
+            initiative: c.initiative,
+            damageP: c.damageP,
+            damageM: c.damageM,
+            defenceP: c.defenceP,
+            defenceM: c.defenceM,
+            speed: c.speed,
+            attackSpeed: c.attackSpeed,
             position: {
-                x: c.spawnX,
-                y: c.spawnY
+                x: c.x,
+                y: c.y
             }
         }));
     }
