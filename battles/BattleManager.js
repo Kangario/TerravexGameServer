@@ -1,5 +1,6 @@
 import { loadBattleSnapshot } from "./LoadBattleSnapshot.js";
 import { BattleFactory } from "./BattleFactory.js";
+import {BattleSession} from "./BattleSession.js";
 
 const activeBattles = new Map(); // matchId -> Battle
 
@@ -26,6 +27,8 @@ export const BattleManager = {
             log("Loading snapshot:", matchId);
             const snapshot = await loadBattleSnapshot(matchId);
             log("Snapshot loaded:", matchId);
+            
+            battle = new BattleSession(snapshot);
             
             battle.onFinished(() => {
                 log("Battle finished → removing:", matchId);
