@@ -1,42 +1,67 @@
 ﻿export class UnitState {
 
-    constructor({ id, team, stats, position }) {
-        this.id = id;
-        this.team = team;
+    constructor(h) {
+        this.id = h.id;
+        this.team = h.team;
 
-        this.maxHp = stats.hp;
-        this.hp = stats.hp;
+        this.heroId = h.heroId;
+        this.templateId = h.templateId;
+        this.ownerId = h.playerId; // или ownerId
 
-        this.maxAp = stats.ap;
-        this.ap = stats.ap;
+        this.name = h.name;
+        this.class = h.class;
 
-        this.initiative = stats.initiative;
+        this.hp = h.hp;
+        this.maxHp = h.maxHp;
+        this.ap = h.ap;
 
-        this.x = position.x;
-        this.y = position.y;
+        this.initiative = h.initiative;
+
+        this.damageP = h.damageP;
+        this.damageM = h.damageM;
+
+        this.defenceP = h.defenceP;
+        this.defenceM = h.defenceM;
+
+        this.speed = h.speed;
+        this.attackSpeed = h.attackSpeed;
+
+        this.level = h.level;
+
+        this.x = h.position.x;
+        this.y = h.position.y;
     }
 
     static fromSnapshot(snapshotUnit) {
-        return new UnitState({
-            id: snapshotUnit.id,
-            team: snapshotUnit.team,
-            stats: snapshotUnit.baseStats,
-            position: snapshotUnit.position
-        });
+        return new UnitState(snapshotUnit);
     }
 
     resetAP() {
-        this.ap = this.maxAp;
+        this.ap = 6;
     }
 
     toJSON() {
         return {
             id: this.id,
             team: this.team,
+            heroId: this.heroId,
+            templateId: this.templateId,
+            ownerId: this.ownerId,
+            name: this.name,
+            class: this.class,
             hp: this.hp,
+            maxHp: this.maxHp,
             ap: this.ap,
+            initiative: this.initiative,
+            damageP: this.damageP,
+            damageM: this.damageM,
+            defenceP: this.defenceP,
+            defenceM: this.defenceM,
+            speed: this.speed,
+            attackSpeed: this.attackSpeed,
+            level: this.level,
             x: this.x,
-            y: this.y
+            y: this.y,
         };
     }
 }
