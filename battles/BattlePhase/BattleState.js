@@ -214,6 +214,7 @@ export class BattleState {
     toClientState() {
         log("TO CLIENT STATE", {
             turn: this.turnNumber,
+            terrain: this.terrain,
             activeUnitId: this.activeUnitId,
             unitsCount: this.units.size,
             finished: this.finished
@@ -221,6 +222,7 @@ export class BattleState {
 
         return {
             matchId: this.matchId,
+            terrain: this.terrain,
             turnNumber: this.turnNumber,
             activeUnitId: this.activeUnitId,
             units: [...this.units.values()].map(u => u.toJSON()),

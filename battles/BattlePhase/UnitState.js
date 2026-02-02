@@ -48,8 +48,7 @@ export class UnitState {
         this.attackSpeed = h.attackSpeed;
 
         this.level = h.level;
-
-        // 🟡 ПРОВЕРКА POSITION
+        
         if (!h.position) {
             log("WARNING: missing position, defaulting to (0,0)", {
                 unitId: h.heroId
