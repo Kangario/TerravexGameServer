@@ -15,7 +15,7 @@ export class UnitState {
         }
 
         log("CONSTRUCTOR START", {
-            id: h.id,
+            id: h.heroId,
             team: h.team,
             hasPosition: !!h.position,
             hp: h.hp,
@@ -23,10 +23,9 @@ export class UnitState {
             initiative: h.initiative
         });
 
-        this.id = h.id;
+        this.id = h.heroId;
         this.team = h.team;
-
-        this.heroId = h.heroId;
+        
         this.templateId = h.templateId;
         this.ownerId = h.playerId ?? h.ownerId;
 
@@ -53,7 +52,7 @@ export class UnitState {
         // 🟡 ПРОВЕРКА POSITION
         if (!h.position) {
             log("WARNING: missing position, defaulting to (0,0)", {
-                unitId: h.id
+                unitId: h.heroId
             });
             this.x = 0;
             this.y = 0;
