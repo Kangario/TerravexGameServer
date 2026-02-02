@@ -25,8 +25,8 @@ export const TerrainGenerator = {
         return new TerrainGrid({
             width,
             height,
-            heights,
-            types
+            heights: Array.from(heights),
+            types: Array.from(types)
         });
     }
 };
