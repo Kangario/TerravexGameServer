@@ -1,19 +1,37 @@
-// battles/BattleSession.js
-
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
+
+function log(stage, data = {}) {
+    console.log(
+        `[BattleSession][${new Date().toISOString()}] ${stage}`,
+        data
+    );
+}
 
 export class BattleSession {
 
     constructor(snapshot) {
+        if (!snapshot) {
+            throw new Error("BattleSession: snapshot is required");
+        }
+
+        log("CONSTRUCTOR START", {
+            matchId: snapshot.matchId,
+            unitsCount: snapshot.units?.length
+        });
+
         this.snapshot = snapshot;
         this.state = new BattleState({ snapshot });
 
         this.phase = "INIT";
         this.players = new Map(); // userId -> ws
-
         this.finishedCallback = null;
-        
+
+        log("CONSTRUCTOR END", {
+            matchId: snapshot.matchId,
+            initialPhase: this.phase
+        });
+
         this.startBattle();
     }
 
@@ -21,11 +39,16 @@ export class BattleSession {
     // LIFECYCLE
     // =========================
     startBattle() {
+        log("BATTLE START");
         this.advanceToTurnStart();
     }
 
     finishBattle() {
         this.phase = "BATTLE_END";
+
+        log("BATTLE FINISH", {
+            winnerTeam: this.state.winnerTeam
+        });
 
         this.broadcast({
             type: "battle_end",
@@ -33,11 +56,13 @@ export class BattleSession {
         });
 
         if (this.finishedCallback) {
+            log("FINISHED CALLBACK CALLED");
             this.finishedCallback();
         }
     }
-    
+
     onFinished(callback) {
+        log("ON FINISHED REGISTERED");
         this.finishedCallback = callback;
     }
 
@@ -47,7 +72,11 @@ export class BattleSession {
     addPlayer(userId, ws) {
         this.players.set(userId, ws);
 
-        // при подключении всегда шлём актуальный state
+        log("PLAYER ADDED", {
+            userId,
+            totalPlayers: this.players.size
+        });
+
         ws.send(JSON.stringify({
             type: "state",
             state: this.state.toClientState()
@@ -56,6 +85,12 @@ export class BattleSession {
 
     reconnectPlayer(ws, userId) {
         this.players.set(userId, ws);
+
+        log("PLAYER RECONNECTED", {
+            userId,
+            totalPlayers: this.players.size
+        });
+
         ws.send(JSON.stringify({
             type: "state",
             state: this.state.toClientState()
@@ -64,9 +99,19 @@ export class BattleSession {
 
     disconnectPlayer(userId) {
         this.players.delete(userId);
+
+        log("PLAYER DISCONNECTED", {
+            userId,
+            totalPlayers: this.players.size
+        });
     }
 
     broadcast(payload) {
+        log("BROADCAST", {
+            type: payload.type,
+            players: this.players.size
+        });
+
         const msg = JSON.stringify(payload);
         this.players.forEach(ws => ws.send(msg));
     }
@@ -76,11 +121,18 @@ export class BattleSession {
     // =========================
     advanceToTurnStart() {
         if (this.state.finished) {
+            log("ADVANCE TURN → BATTLE FINISHED");
             this.finishBattle();
             return;
         }
 
         this.phase = "TURN_START";
+
+        log("TURN START PHASE", {
+            activeUnitId: this.state.activeUnitId,
+            turn: this.state.turnNumber + 1
+        });
+
         this.state.startTurn();
 
         this.broadcast({
@@ -90,31 +142,52 @@ export class BattleSession {
         });
 
         this.phase = "AWAIT_TURN_ACTIONS";
+
+        log("AWAIT TURN ACTIONS", {
+            activeUnitId: this.state.activeUnitId
+        });
     }
 
     // =========================
     // CLIENT INPUT
     // =========================
     handleTurnActions(userId, msg) {
+        log("HANDLE TURN ACTIONS", {
+            userId,
+            phase: this.phase,
+            msgUnitId: msg.unitId
+        });
+
         if (this.phase !== "AWAIT_TURN_ACTIONS") {
+            log("REJECT ACTIONS — WRONG PHASE", {
+                phase: this.phase
+            });
             return this.reject(userId, "Not accepting actions now");
         }
 
         const activeUnit = this.state.getActiveUnit();
 
-        // ❗ сервер решает, кто ходит
         if (msg.unitId !== activeUnit.id) {
+            log("REJECT ACTIONS — NOT YOUR TURN", {
+                userId,
+                expectedUnit: activeUnit.id,
+                got: msg.unitId
+            });
             return this.reject(userId, "Not your unit's turn");
         }
 
         this.phase = "RESOLVE_TURN";
+
+        log("RESOLVE TURN", {
+            unitId: activeUnit.id,
+            actionsCount: msg.actions?.length
+        });
 
         const result = TurnProcessor.process({
             state: this.state,
             actions: msg.actions
         });
 
-        // рассылаем результат
         this.broadcast({
             type: "turn_result",
             unitId: activeUnit.id,
@@ -127,6 +200,11 @@ export class BattleSession {
     }
 
     reject(userId, reason) {
+        log("REJECT", {
+            userId,
+            reason
+        });
+
         const ws = this.players.get(userId);
         if (!ws) return;
 
