@@ -78,7 +78,7 @@ export class BattleSession {
         });
 
         ws.send(JSON.stringify({
-            type: "state",
+            type: "battle_init",
             state: this.state.toClientState()
         }));
     }
@@ -92,7 +92,7 @@ export class BattleSession {
         });
 
         ws.send(JSON.stringify({
-            type: "state",
+            type: "battle_init",
             state: this.state.toClientState()
         }));
     }
