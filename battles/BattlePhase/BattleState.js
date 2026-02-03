@@ -19,8 +19,9 @@ export class BattleState {
             unitsCount: snapshot.units?.length,
             hasTerrain: !!snapshot.terrain
         });
-
+    
         this.matchId = snapshot.matchId;
+        this.teamId = 0;
         this.turnNumber = 0;
 
         this.units = new Map();
@@ -63,6 +64,7 @@ export class BattleState {
                 unitId: unit.id,
                 team: unit.team
             });
+            this.teamId = unit.team;
 
             const state = UnitState.fromSnapshot(unit);
 
@@ -222,6 +224,7 @@ export class BattleState {
 
         return {
             matchId: this.matchId,
+            teamId: this.teamId,
             terrain: this.terrain,
             turnNumber: this.turnNumber,
             activeUnitId: this.activeUnitId,
