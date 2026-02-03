@@ -1,5 +1,6 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
+import { gsRedis } from "../config/redis.js";
 
 function log(stage, data = {}) {
     console.log(
@@ -10,6 +11,12 @@ function log(stage, data = {}) {
 
 export class BattleSession {
 
+    static async create(snapshot) {
+        const session = new BattleSession(snapshot);
+        session.contexPlayers = await session.loadPlayerTeamsMap(snapshot.matchId);
+        return session;
+    }
+    
     constructor(snapshot) {
         if (!snapshot) {
             throw new Error("BattleSession: snapshot is required");
@@ -22,10 +29,11 @@ export class BattleSession {
         
         this.snapshot = snapshot;
         this.state = new BattleState({ snapshot });
-        this.matchPlayers = snapshot.players;
+        
         
         this.phase = "INIT";
         this.players = new Map(); // userId -> ws
+        this.contexPlayers = new Map();
         this.finishedCallback = null;
 
         this.deployment = {
@@ -40,10 +48,53 @@ export class BattleSession {
         });
         
     }
-    
-    getTeamIdForUser(userId) {
-        const player = this.matchPlayers.find(p => p.userId === userId);
-        return player?.teamId;
+
+    async loadPlayerTeamsMap(matchId) {
+        if (!matchId) {
+            throw new Error("loadPlayerTeamsMap: matchId is required");
+        }
+
+        const redisKey = `gs:match:${matchId}`;
+
+        const raw = await gsRedis.get(redisKey);
+        if (!raw) {
+            throw new Error(`Match ${matchId} not found in Redis`);
+        }
+
+        let match;
+        try {
+            match = JSON.parse(raw);
+        } catch (err) {
+            throw new Error(`Invalid JSON for match ${matchId}`);
+        }
+
+        if (!Array.isArray(match.players)) {
+            throw new Error(`Match ${matchId} has no players array`);
+        }
+
+        const map = new Map();
+
+        for (const player of match.players) {
+            if (!player?.userId) {
+                throw new Error(`Invalid player entry in match ${matchId}`);
+            }
+
+            if (typeof player.teamId !== "number") {
+                throw new Error(
+                    `Missing teamId for user ${player.userId} in match ${matchId}`
+                );
+            }
+
+            if (map.has(player.userId)) {
+                throw new Error(
+                    `Duplicate userId ${player.userId} in match ${matchId}`
+                );
+            }
+
+            map.set(player.userId, player.teamId);
+        }
+
+        return map;
     }
     // =========================
     // LIFECYCLE
@@ -134,30 +185,46 @@ export class BattleSession {
             userId,
             totalPlayers: this.players.size
         });
-        
+        const teamId = this.contexPlayers.get(userId);
+        if (teamId === undefined) {
+            log("INVALID TEAM ID", { userId });
+            return this.reject(userId, "You are not part of this match");
+        }
         ws.send(JSON.stringify({
             type: "battle_init",
+            teamId,
             state: this.state.toClientState()
         }));
     }
 
     reconnectPlayer(ws, userId) {
         this.players.set(userId, ws);
-
+        const teamId = this.contexPlayers.get(userId);
+        if (teamId === undefined) {
+            log("INVALID TEAM ID", { userId });
+            return this.reject(userId, "You are not part of this match");
+        }
         log("PLAYER RECONNECTED", {
             userId,
             totalPlayers: this.players.size
         });
         ws.send(JSON.stringify({
             type: "battle_init",
+            teamId,
             state: this.state.toClientState()
         }));
     }
 
     disconnectPlayer(userId) {
         this.players.delete(userId);
+        const teamId = this.contexPlayers.get(userId);
+        if (teamId === undefined) {
+            log("INVALID TEAM ID", { userId });
+            return this.reject(userId, "You are not part of this match");
+        }
         log("PLAYER DISCONNECTED", {
             userId,
+            teamId,
             totalPlayers: this.players.size
         });
     }
