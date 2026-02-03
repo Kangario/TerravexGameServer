@@ -27,7 +27,7 @@ export const BattleManager = {
             const snapshot = await loadBattleSnapshot(matchId);
             log("Snapshot loaded:", matchId);
             
-            battle = new BattleSession.create(snapshot);
+            battle = await BattleSession.create(snapshot);
             
             battle.onFinished(() => {
                 log("Battle finished → removing:", matchId);
