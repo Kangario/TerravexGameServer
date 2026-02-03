@@ -102,7 +102,7 @@ export class UnitState {
             templateId: this.templateId,
             ownerId: this.ownerId,
             name: this.name,
-            class: this.class,
+            classHero: this.class,
             hp: this.hp,
             maxHp: this.maxHp,
             ap: this.ap,

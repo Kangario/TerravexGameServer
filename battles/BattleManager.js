@@ -120,5 +120,29 @@ export const BattleManager = {
 
         battle.disconnectPlayer(ws.userId);
         log("Player disconnected:", ws.userId, "from", ws.matchId);
+    },
+
+    handleDeployUnit(ws, msg) {
+        log("handleDeployUnit:", ws.userId);
+
+        try {
+            const battle = this.getBattle(ws);
+            battle.handleDeployUnit(ws.userId, msg);
+        } catch (err) {
+            logErr("handleDeployUnit failed:", err);
+        }
+    },
+    
+    handleDeploymentReady(ws) {
+        log("handleDeploymentReady:", ws.userId);
+
+        try {
+            const battle = this.getBattle(ws);
+            battle.handleDeploymentReady(ws.userId);
+        } catch (err) {
+            logErr("handleDeploymentReady failed:", err);
+        }
     }
+
+
 };

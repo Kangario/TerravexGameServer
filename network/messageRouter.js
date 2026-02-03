@@ -35,6 +35,16 @@ export const messageRouter = {
                     log("✅ RECONNECT handled");
                     break;
 
+                case "deploy_unit":
+                    log("➡️ ROUTE → BattleManager.handleDeployUnit");
+                    BattleManager.handleDeployUnit(ws, msg);
+                    break;
+
+                case "deployment_ready":
+                    log("➡️ ROUTE → BattleManager.handleDeploymentReady");
+                    BattleManager.handleDeploymentReady(ws);
+                    break;
+
                 default:
                     log("⚠️ UNKNOWN MESSAGE TYPE", msg.type);
             }

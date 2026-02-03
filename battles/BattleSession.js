@@ -27,6 +27,12 @@ export class BattleSession {
         this.players = new Map(); // userId -> ws
         this.finishedCallback = null;
 
+        this.deployment = {
+            readyPlayers: new Set(),
+            startedAt: null,
+            timer: null
+        };
+        
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
             initialPhase: this.phase
@@ -40,6 +46,54 @@ export class BattleSession {
     // =========================
     startBattle() {
         log("BATTLE START");
+        this.startDeployment();
+    }
+
+    startDeployment() {
+        this.phase = "DEPLOYMENT";
+        this.deployment.startedAt = Date.now();
+        this.deployment.readyPlayers.clear();
+
+        this.broadcast({
+            type: "deployment_start",
+            duration: 15000,
+            allowedRows: {
+                team1: [0, 1],
+                team2: [13, 14]
+            }
+        });
+
+        this.deployment.timer = setTimeout(() => {
+            this.finishDeployment();
+        }, 15000);
+    }
+
+    handleDeploymentReady(userId) {
+        if (this.phase !== "DEPLOYMENT") return;
+
+        this.deployment.readyPlayers.add(userId);
+
+        this.broadcast({
+            type: "deployment_player_ready",
+            userId
+        });
+
+        if (this.deployment.readyPlayers.size === this.players.size) {
+            this.finishDeployment();
+        }
+    }
+
+    finishDeployment() {
+        if (this.phase !== "DEPLOYMENT") return;
+
+        clearTimeout(this.deployment.timer);
+
+        this.phase = "TURN_START";
+
+        this.broadcast({
+            type: "deployment_end"
+        });
+
         this.advanceToTurnStart();
     }
 
