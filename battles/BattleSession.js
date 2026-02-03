@@ -37,8 +37,7 @@ export class BattleSession {
             matchId: snapshot.matchId,
             initialPhase: this.phase
         });
-
-        this.startBattle();
+        
     }
 
     // =========================

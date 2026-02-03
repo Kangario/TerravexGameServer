@@ -36,7 +36,7 @@ export const BattleManager = {
 
             activeBattles.set(matchId, battle);
             log("Battle stored in activeBattles:", matchId);
-
+            
             return battle;
 
         } catch (err) {
@@ -73,9 +73,11 @@ export const BattleManager = {
 
             battle.addPlayer(msg.userId, ws);
             log("Player added:", msg.userId, "→", msg.matchId);
-
+            
+            
             this.bindSocket(ws, msg);
-
+            battle.startBattle();
+            
         } catch (err) {
             logErr("handleJoin failed:", err);
         }
