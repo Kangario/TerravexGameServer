@@ -25,6 +25,7 @@ export class BattleSession {
 
         this.phase = "INIT";
         this.players = new Map(); // userId -> ws
+        this.contextPlayers = new Map();
         this.finishedCallback = null;
 
         this.deployment = {
@@ -122,16 +123,17 @@ export class BattleSession {
     // =========================
     // PLAYERS
     // =========================
-    addPlayer(userId, ws) {
+    addPlayer(userId, ws, teamId) {
         this.players.set(userId, ws);
-
+        this.contextPlayers.set(userId, teamId);
         log("PLAYER ADDED", {
             userId,
             totalPlayers: this.players.size
         });
-
+        
         ws.send(JSON.stringify({
             type: "battle_init",
+            teamId: teamId,
             state: this.state.toClientState()
         }));
     }
@@ -143,18 +145,20 @@ export class BattleSession {
             userId,
             totalPlayers: this.players.size
         });
-
+        const teamId = this.contextPlayers.get(userId);
         ws.send(JSON.stringify({
             type: "battle_init",
+            teamId: teamId,
             state: this.state.toClientState()
         }));
     }
 
     disconnectPlayer(userId) {
         this.players.delete(userId);
-
+        const teamId = this.contextPlayers.get(userId);
         log("PLAYER DISCONNECTED", {
             userId,
+            teamId: teamId,
             totalPlayers: this.players.size
         });
     }

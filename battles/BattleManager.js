@@ -70,8 +70,9 @@ export const BattleManager = {
 
         try {
             const battle = await this.getOrCreateBattle(msg.matchId);
-
-            battle.addPlayer(msg.userId, ws);
+            const player  = msg.players.find(p => p.userId === msg.userId);
+            const teamId = player?.teamId;
+            battle.addPlayer(msg.userId, ws, teamId);
             log("Player added:", msg.userId, "→", msg.matchId);
             
             
