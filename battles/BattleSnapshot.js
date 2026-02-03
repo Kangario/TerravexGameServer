@@ -4,25 +4,27 @@
 
 export class BattleSnapshot {
 
-    constructor({ matchId, seed, terrain, units }) {
+    constructor({ matchId, seed, terrain, units, players }) {
         this.matchId = matchId;
         this.seed = seed;
         this.terrain = terrain;
         this.units = units;
-
+        this.players = players; 
+        
         log("INSTANCE CREATED", {
             matchId,
             unitsCount: units.length
         });
     }
 
-    static create({ matchId, seed, terrain, units }) {
+    static create({ matchId, seed, terrain, units, players }) {
         log("CREATE called", {
             matchId,
             hasSeed: !!seed,
             hasTerrain: !!terrain,
             unitsType: typeof units,
-            unitsCount: Array.isArray(units) ? units.length : null
+            unitsCount: Array.isArray(units) ? units.length : null,
+            players: players
         });
 
         try {
@@ -35,7 +37,8 @@ export class BattleSnapshot {
                 matchId,
                 seed,
                 terrain,
-                units
+                units,
+                players
             });
 
             log("CREATE success", {
@@ -65,7 +68,8 @@ export class BattleSnapshot {
             matchId: this.matchId,
             seed: this.seed,
             terrain: this.terrain,
-            units: this.units
+            units: this.units,
+            players: this.players
         };
     }
 }

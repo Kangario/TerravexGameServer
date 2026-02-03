@@ -60,7 +60,8 @@ export async function loadBattleSnapshot(matchId) {
             matchId,
             seed: match.seed,
             terrain,
-            units: match.units
+            units: match.units,
+            players: match.players
         });
 
         log("Snapshot created", {

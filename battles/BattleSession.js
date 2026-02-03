@@ -19,10 +19,11 @@ export class BattleSession {
             matchId: snapshot.matchId,
             unitsCount: snapshot.units?.length
         });
-
+        
         this.snapshot = snapshot;
         this.state = new BattleState({ snapshot });
-
+        this.matchPlayers = snapshot.players;
+        
         this.phase = "INIT";
         this.players = new Map(); // userId -> ws
         this.contextPlayers = new Map();
@@ -40,7 +41,11 @@ export class BattleSession {
         });
         
     }
-
+    
+    getTeamIdForUser(userId) {
+        const player = this.matchPlayers.find(p => p.userId === userId);
+        return player?.teamId;
+    }
     // =========================
     // LIFECYCLE
     // =========================
@@ -123,7 +128,9 @@ export class BattleSession {
     // =========================
     // PLAYERS
     // =========================
-    addPlayer(userId, ws, teamId) {
+    addPlayer(userId, ws) {
+        const teamId = this.getTeamIdForUser(userId);
+        
         this.players.set(userId, ws);
         this.contextPlayers.set(userId, teamId);
         log("PLAYER ADDED", {
@@ -133,32 +140,32 @@ export class BattleSession {
         
         ws.send(JSON.stringify({
             type: "battle_init",
-            teamId: teamId,
+            teamId,
             state: this.state.toClientState()
         }));
     }
 
     reconnectPlayer(ws, userId) {
+        const teamId = this.getTeamIdForUser(userId);
         this.players.set(userId, ws);
 
         log("PLAYER RECONNECTED", {
             userId,
             totalPlayers: this.players.size
         });
-        const teamId = this.contextPlayers.get(userId);
         ws.send(JSON.stringify({
             type: "battle_init",
-            teamId: teamId,
+            teamId,
             state: this.state.toClientState()
         }));
     }
 
     disconnectPlayer(userId) {
+        const teamId = this.getTeamIdForUser(userId);
         this.players.delete(userId);
-        const teamId = this.contextPlayers.get(userId);
         log("PLAYER DISCONNECTED", {
             userId,
-            teamId: teamId,
+            teamId,
             totalPlayers: this.players.size
         });
     }
