@@ -22,7 +22,7 @@ export class BattleState {
     
         this.matchId = snapshot.matchId;
         this.turnNumber = 0;
-
+        this.teamId = snapshot.teamId;
         this.units = new Map();
         this.initiativeQueue = [];
         this.activeUnitId = null;
@@ -222,6 +222,7 @@ export class BattleState {
 
         return {
             matchId: this.matchId,
+            teamId: this.teamId,
             terrain: this.terrain,
             turnNumber: this.turnNumber,
             activeUnitId: this.activeUnitId,
