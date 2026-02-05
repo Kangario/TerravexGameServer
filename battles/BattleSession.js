@@ -114,7 +114,7 @@ export class BattleSession {
             duration: 45000,
             allowedRows: {
                 team1: [1, 2],
-                team2: [38, 39]
+                team2: [37, 38]
             }
         });
 
