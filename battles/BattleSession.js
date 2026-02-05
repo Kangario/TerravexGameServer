@@ -111,16 +111,16 @@ export class BattleSession {
 
         this.broadcast({
             type: "deployment_start",
-            duration: 15000,
+            duration: 45000,
             allowedRows: {
-                team1: [0, 1],
-                team2: [13, 14]
+                team1: [1, 2],
+                team2: [38, 39]
             }
         });
 
         this.deployment.timer = setTimeout(() => {
             this.finishDeployment();
-        }, 15000);
+        }, 45000);
     }
 
     handleDeploymentReady(userId) {
