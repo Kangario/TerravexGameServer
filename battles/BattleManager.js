@@ -67,7 +67,7 @@ export const BattleManager = {
             const battle = this.getBattle(ws);
 
             battle.handleAction({
-                ...action,
+                ...action.action,
                 userId: ws.userId
             });
 
