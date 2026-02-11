@@ -1,6 +1,6 @@
 ﻿// battles/turn/TurnProcessor.js
 
-import { ActionFactory } from "../Actions/ActionFactory.js";
+import { BattleActionFactory } from "../Actions/BattleActionFactory.js";
 
 export class TurnProcessor {
 
@@ -12,7 +12,7 @@ export class TurnProcessor {
 
         // 2️⃣ выполнение
         for (const action of actions) {
-            const handler = ActionFactory.create(action.type);
+            const handler = BattleActionFactory.create(action.type);
             handler.execute({
                 state,
                 action,
@@ -36,15 +36,8 @@ export class TurnProcessor {
         let apLeft = unit.ap;
 
         for (const action of actions) {
-            const handler = ActionFactory.create(action.type);
-            const cost = handler.getCost(state, action);
+            const handler = BattleActionFactory.create(action.type);
 
-            if (apLeft < cost) {
-                throw new Error("Not enough AP");
-            }
-
-            handler.validate(state, action);
-            apLeft -= cost;
         }
     }
 }

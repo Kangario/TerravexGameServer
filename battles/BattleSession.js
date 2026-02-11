@@ -1,6 +1,8 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
 import { gsRedis } from "../config/redis.js";
+import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
+import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 
 function log(stage, data = {}) {
     console.log(
@@ -29,18 +31,15 @@ export class BattleSession {
         
         this.snapshot = snapshot;
         this.state = new BattleState({ snapshot });
-        
+        this.events = [];
         
         this.phase = "INIT";
         this.players = new Map(); // userId -> ws
         this.contexPlayers = new Map();
+        this.deployment = {readyPlayers: new Set() };
+        this.timer = null;
         this.finishedCallback = null;
-
-        this.deployment = {
-            readyPlayers: new Set(),
-            startedAt: null,
-            timer: null
-        };
+        
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
@@ -104,54 +103,40 @@ export class BattleSession {
         this.startDeployment();
     }
 
-    startDeployment() {
-        this.phase = "DEPLOYMENT";
-        this.deployment.startedAt = Date.now();
-        this.deployment.readyPlayers.clear();
+    handleAction(action) {
 
-        this.broadcast({
-            type: "deployment_start",
-            duration: 45000,
-            allowedRows: {
-                team1: [1, 2],
-                team2: [37, 38]
-            }
+        // 1️⃣ process action → events
+        const result = BattleActionProcessor.process({
+            session: this,
+            action
         });
 
-        this.deployment.timer = setTimeout(() => {
-            this.finishDeployment();
-        }, 45000);
+        // 2️⃣ apply events
+        this.applyEvents(result.events);
     }
 
-    handleDeploymentReady(userId) {
-        if (this.phase !== "DEPLOYMENT") return;
+    applyEvents(events) {
 
-        this.deployment.readyPlayers.add(userId);
+        for (const event of events) {
 
-        this.broadcast({
-            type: "deployment_player_ready",
-            userId
-        });
+            // применяем к state
+            BattleEventDispatcher.apply(this, event);
 
-        if (this.deployment.readyPlayers.size === this.players.size) {
-            this.finishDeployment();
+            // сохраняем историю
+            this.events.push(event);
         }
-    }
 
-    finishDeployment() {
-        if (this.phase !== "DEPLOYMENT") return;
-
-        clearTimeout(this.deployment.timer);
-
-        this.phase = "TURN_START";
-
+        // централизованный broadcast
         this.broadcast({
-            type: "deployment_end"
+            type: "events",
+            events
         });
-
-        this.advanceToTurnStart();
     }
 
+    startDeployment() {
+       
+    }
+    
     finishBattle() {
         this.phase = "BATTLE_END";
 
@@ -248,8 +233,7 @@ export class BattleSession {
             this.finishBattle();
             return;
         }
-
-        this.phase = "TURN_START";
+        
 
         log("TURN START PHASE", {
             activeUnitId: this.state.activeUnitId,
