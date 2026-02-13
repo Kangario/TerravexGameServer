@@ -24,20 +24,50 @@ export class BattleEventDispatcher {
         },
         
         deployment_player_ready(session, event) {
-
             session.deployment.readyPlayers.add(event.userId);
         },
 
         deployment_end(session, event) {
 
             session.phase = "TURN_START";
+            clearTimeout(session.timer);
+            session.applyEvents([{
+                type: "turn_start"
+            }]);
+            
+        },
 
-            session.advanceToTurnStart();
+        turn_start(session, event) {
+
+            console.log("Awaiting player");
+            session.state.startTurn();
+        },
+
+        turn_end(session, event) {
+
+            console.log("turn_end player");
+            session.state.endTurn();
         },
 
         unit_move(session, event) {
 
-           
+            console.log("unit_move player");
+
+            session.state.moveUnit(
+                event.unitId,
+                event.position[0],
+                event.position[1]
+            );
+        },
+
+        unit_attack(session, event) {
+
+            console.log("unit_attack player");
+            if (!session.state.isAlive(event.target)) return;
+            session.state.applyDamage(
+                event.unitId,
+                event.target
+            );
         }
 
     };

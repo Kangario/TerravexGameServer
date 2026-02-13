@@ -40,7 +40,6 @@ export class BattleSession {
         this.timer = null;
         this.finishedCallback = null;
         
-        
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
             initialPhase: this.phase
@@ -105,36 +104,57 @@ export class BattleSession {
 
     handleAction(action) {
 
-        // 1️⃣ process action → events
         const result = BattleActionProcessor.process({
             session: this,
             action
         });
 
-        // 2️⃣ apply events
         this.applyEvents(result.events);
     }
 
     applyEvents(events) {
-
         for (const event of events) {
 
-            // применяем к state
             BattleEventDispatcher.apply(this, event);
-
-            // сохраняем историю
             this.events.push(event);
         }
 
-        // централизованный broadcast
         this.broadcast({
             type: "events",
             events
         });
+
+        if (events.some(e => e.type === "turn_start")) {
+
+            clearTimeout(this.timer);
+
+            this.timer = setTimeout(() => {
+
+                this.applyEvents([
+                    { type: "turn_end" }
+                ]);
+
+            }, 20000);
+        }
+        
+        if (events.some(e => e.type === "turn_end")) {
+
+            clearTimeout(this.timer);
+
+            this.applyEvents([
+                { type: "turn_start" }
+            ]);
+        }
     }
 
-    startDeployment() {
-       
+    setTimeTurn(value){
+        this.timer = setTimeout(() => {
+
+            this.applyEvents([
+                { type: "await_player" }
+            ]);
+
+        }, value);
     }
     
     finishBattle() {
@@ -239,7 +259,7 @@ export class BattleSession {
             activeUnitId: this.state.activeUnitId,
             turn: this.state.turnNumber + 1
         });
-
+        
         this.state.startTurn();
 
         this.broadcast({

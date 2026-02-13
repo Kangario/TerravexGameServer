@@ -35,7 +35,7 @@ export class UnitState {
         this.hp = h.hp;
         this.maxHp = h.maxHp;
         this.ap = h.ap;
-
+        
         this.initiative = h.initiative;
 
         this.damageP = h.damageP;

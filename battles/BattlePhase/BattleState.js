@@ -126,7 +126,7 @@ export class BattleState {
         this.initiativeQueue.push(this.initiativeQueue.shift());
         this.activeUnitId = this.initiativeQueue[0];
 
-        log("TURN END", {
+        log("turn_end", {
             endedUnitId,
             nextActiveUnitId: this.activeUnitId,
             initiativeOrder: [...this.initiativeQueue]
@@ -136,21 +136,24 @@ export class BattleState {
     // =========================
     // COMBAT
     // =========================
-    applyDamage(targetId, amount) {
-        const unit = this.getUnit(targetId);
+    applyDamage(untiId,targetId) {
+        const unit = this.getUnit(untiId);
         if (!unit) return;
-
-        const hpBefore = unit.hp;
-        unit.hp = Math.max(0, unit.hp - amount);
+        const amount = unit.damageP;
+        const targetUnit = this.getUnit(targetId);
+        if (!targetUnit) return;
+        
+        const hpBefore = targetUnit.hp;
+        targetUnit.hp = Math.max(0, targetUnit.hp - amount);
 
         log("DAMAGE APPLIED", {
             targetId,
             damage: amount,
             hpBefore,
-            hpAfter: unit.hp
+            hpAfter: targetUnit.hp
         });
 
-        if (unit.hp === 0) {
+        if (targetUnit.hp === 0) {
             this.handleUnitDeath(targetId);
         }
     }

@@ -58,8 +58,7 @@ export const BattleManager = {
         battle.startBattle();
     },
 
-    // ⭐ ЕДИНАЯ точка входа для gameplay
-
+   
     handleAction(ws, action) {
 
         try {
