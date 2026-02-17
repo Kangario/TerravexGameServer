@@ -36,8 +36,8 @@ export class BattleEventDispatcher {
 
                 unit.x = x;
                 unit.y = y;
+                console.warn("[deployment_player_ready] " +unit.x + ", " + unit.y);
             }
-            
             if (session.deployment.readyPlayers.size === session.players.size) {
                 const unitsTemp = {};
 
