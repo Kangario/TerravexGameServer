@@ -23,7 +23,8 @@ export class DeployReadyAction extends BaseBattleAction {
             userId: action.userId,
             units: action.units
         });
-    
+        console.log(session.players.size)
+        console.log(session.deployment.readyPlayers.size)
         if (session.deployment.readyPlayers.size === session.players.size) {
 
             eventLog.push({
