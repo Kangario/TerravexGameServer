@@ -15,12 +15,15 @@ export class DeployReadyAction extends BaseBattleAction {
 
     execute({ session, action, eventLog }) {
         
+        console.log(action);
+        
+        
         eventLog.push({
             type: "deployment_player_ready",
             userId: action.userId,
             units: action.units
         });
-
+    
         if (session.deployment.readyPlayers.size === session.players.size) {
 
             eventLog.push({
