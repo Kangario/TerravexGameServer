@@ -26,11 +26,18 @@ export class BattleEventDispatcher {
         deployment_player_ready(session, event) {
             session.deployment.readyPlayers.add(event.userId);
             if (session.deployment.readyPlayers.size === session.players.size) {
+                const unitsTemp = {};
 
+                for (const [unitId, unit] of session.state.units) {
+                    unitsTemp[unitId] = {
+                        position: [unit.position.x, unit.position.y]
+                    };
+                }
+                
                 session.applyEvents([{
                     type: "deployment_end",
                     userId: event.userId,
-                    units: event.units
+                    units: unitsTemp
                 }]);
 
                 session.phase = "TURN_START";
