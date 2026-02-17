@@ -29,16 +29,17 @@ export class BattleEventDispatcher {
             for (const [unitId, data] of Object.entries(event.units)) {
 
                 const id = Number(unitId);
-
+                
                 const unit = session.state.getUnit(id);
                 if (!unit) continue;
+                if (unit.ownerId === event.userId) {
+                    const [x, y] = data.position;
 
-                const [x, y] = data.position;
+                    unit.x = x;
+                    unit.y = y;
 
-                unit.x = x;
-                unit.y = y;
-
-                console.warn("[deployment_player_ready]", unit.x, unit.y);
+                    console.warn("[deployment_player_ready]", unit.x, unit.y);
+                }
             }
             if (session.deployment.readyPlayers.size === session.players.size) {
                 const unitsTemp = {};
