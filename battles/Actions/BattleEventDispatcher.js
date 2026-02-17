@@ -25,6 +25,19 @@ export class BattleEventDispatcher {
         
         deployment_player_ready(session, event) {
             session.deployment.readyPlayers.add(event.userId);
+
+            for (const [unitId, data] of Object.entries(event.units)) {
+
+                const unit = session.state.get(unitId);
+
+                if (!unit) continue;
+
+                const [x, y] = data.position;
+
+                unit.x = x;
+                unit.y = y;
+            }
+            
             if (session.deployment.readyPlayers.size === session.players.size) {
                 const unitsTemp = {};
 
