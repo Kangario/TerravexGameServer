@@ -30,7 +30,7 @@ export class BattleEventDispatcher {
 
                 for (const [unitId, unit] of session.state.units) {
                     unitsTemp[unitId] = {
-                        position: [unit.position.x, unit.position.y]
+                        position: [unit.x, unit.y]
                     };
                 }
                 
