@@ -20,6 +20,7 @@ export class DeployReadyAction extends BaseBattleAction {
         eventLog.push({
             type: "deployment_player_ready",
             userId: action.userId,
+            units: action.units
         });
     }
 }
