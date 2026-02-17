@@ -42,18 +42,11 @@ export class BattleEventDispatcher {
                 }
             }
             if (session.deployment.readyPlayers.size === session.players.size) {
-                const unitsTemp = {};
-
-                for (const [unitId, unit] of session.state.units) {
-                    unitsTemp[unitId] = {
-                        position: [unit.x, unit.y]
-                    };
-                }
                 
                 session.applyEvents([{
                     type: "deployment_end",
                     userId: event.userId,
-                    units: unitsTemp
+                    units: buildUnitsPositionMap(session.state.units)
                 }]);
 
                 session.phase = "TURN_START";
@@ -64,11 +57,13 @@ export class BattleEventDispatcher {
 
             session.phase = "TURN_START";
             clearTimeout(session.timer);
+            
             session.applyEvents([{
                 type: "turn_start",
                 duration: 40000,
                 activeUnitId: session.state.activeUnitId,
-                initiative: session.state.initiativeQueue
+                initiative: session.state.initiativeQueue,
+                units: buildUnitsPositionMap(session.state.units)
             }]);
             
         },
@@ -118,5 +113,19 @@ export class BattleEventDispatcher {
 
         handler(session, event);
     }
-
 }
+
+function buildUnitsPositionMap(unitsMap) {
+
+    const result = {};
+
+    for (const [unitId, unit] of unitsMap) {
+        result[unitId] = {
+            position: [unit.x, unit.y]
+        };
+    }
+
+    return result;
+}
+
+
