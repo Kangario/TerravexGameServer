@@ -27,11 +27,11 @@ export class BattleEventDispatcher {
             session.deployment.readyPlayers.add(event.userId);
             if (session.deployment.readyPlayers.size === session.players.size) {
 
-                session.applyEvents({
+                session.applyEvents([{
                     type: "deployment_end",
                     userId: event.userId,
                     units: event.units
-                });
+                }]);
 
                 session.phase = "TURN_START";
             }
