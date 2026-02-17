@@ -28,7 +28,7 @@ export class BattleEventDispatcher {
 
             for (const [unitId, data] of Object.entries(event.units)) {
 
-                const unit = session.state.get(unitId);
+                const unit = session.state.getUnit(unitId);
 
                 if (!unit) continue;
 
