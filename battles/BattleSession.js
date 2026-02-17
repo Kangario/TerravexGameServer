@@ -131,18 +131,25 @@ export class BattleSession {
             this.timer = setTimeout(() => {
 
                 this.applyEvents([
-                    { type: "turn_end" }
+                    { 
+                        type: "turn_end"
+                    }
                 ]);
 
-            }, 20000);
+            }, 40000);
         }
         
         if (events.some(e => e.type === "turn_end")) {
 
             clearTimeout(this.timer);
-
+            const units = Array.from(this.state.units.values());
             this.applyEvents([
-                { type: "turn_start" }
+                { 
+                    type: "turn_start",
+                    activeUnitId: this.state.activeUnitId,
+                    initiative: this.state.initiativeQueue,
+                    units: units
+                }
             ]);
         }
     }

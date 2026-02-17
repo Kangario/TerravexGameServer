@@ -65,7 +65,10 @@ export class BattleEventDispatcher {
             session.phase = "TURN_START";
             clearTimeout(session.timer);
             session.applyEvents([{
-                type: "turn_start"
+                type: "turn_start",
+                duration: 40000,
+                activeUnitId: session.state.activeUnitId,
+                initiative: session.state.initiativeQueue
             }]);
             
         },
