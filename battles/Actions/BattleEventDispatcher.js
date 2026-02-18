@@ -5,10 +5,10 @@ export class BattleEventDispatcher {
     static handlers = {
 
         DEPLOYMENT(session, event) {
-            if (session.phase !== "INIT") return;
+
+            if (session.phase !== "INIT") return [];
 
             session.phase = "DEPLOYMENT";
-
             session.deployment.readyPlayers.clear();
 
             if (!session.timer) {
@@ -21,99 +21,106 @@ export class BattleEventDispatcher {
 
                 }, event.duration);
             }
+
+            return [];
         },
-        
+
         deployment_player_ready(session, event) {
+
             session.deployment.readyPlayers.add(event.userId);
 
             for (const [unitId, data] of Object.entries(event.units)) {
 
                 const id = Number(unitId);
-                
                 const unit = session.state.getUnit(id);
                 if (!unit) continue;
-                if (unit.ownerId === event.userId) {
-                    const [x, y] = data.position;
 
+                if (unit.ownerId === event.userId) {
+
+                    const [x, y] = data.position;
                     unit.x = x;
                     unit.y = y;
-
-                    console.warn("[deployment_player_ready]", unit.x, unit.y);
                 }
             }
-            console.warn("[deployment_player_ready] ", session.deployment.readyPlayers.size);
-            console.warn("[deployment_player_ready] ", session.players.size);
+
             if (session.deployment.readyPlayers.size === session.players.size) {
-                
-                session.applyEvents([{
+
+                session.phase = "TURN_START";
+
+                return [{
                     type: "deployment_end",
                     userId: event.userId,
                     units: buildUnitsPositionMap(session.state.units)
-                }]);
-
-                session.phase = "TURN_START";
+                }];
             }
+
+            return [];
         },
 
         deployment_end(session, event) {
 
-            session.phase = "TURN_START";
             clearTimeout(session.timer);
-            
-            session.applyEvents([{
+
+            return [{
                 type: "turn_start",
                 duration: 40000,
                 activeUnitId: session.state.activeUnitId,
                 initiative: session.state.initiativeQueue,
                 units: buildUnitsPositionMap(session.state.units)
-            }]);
-            
+            }];
         },
 
         turn_start(session, event) {
 
-            console.log("Awaiting player");
             session.state.startTurn();
+            return [];
         },
 
         turn_end(session, event) {
 
-            console.log("turn_end player");
             session.state.endTurn();
+
+            return [{
+                type: "turn_start",
+                duration: 40000,
+                activeUnitId: session.state.activeUnitId,
+                initiative: session.state.initiativeQueue,
+                units: buildUnitsPositionMap(session.state.units)
+            }];
         },
 
         unit_move(session, event) {
-
-            console.log("unit_move player");
 
             session.state.moveUnit(
                 event.unitId,
                 event.position[0],
                 event.position[1]
             );
+
+            return [];
         },
 
         unit_attack(session, event) {
 
-            console.log("unit_attack player");
-            if (!session.state.isAlive(event.target)) return;
+            if (!session.state.isAlive(event.target)) return [];
+
             session.state.applyDamage(
                 event.unitId,
                 event.target
             );
-        }
 
+            return [];
+        }
     };
 
     static apply(session, event) {
 
         const handler = this.handlers[event.type];
 
-        if (!handler) {
+        if (!handler)
             throw new Error(`[BattleEventDispatcher] Unknown event: ${event.type}`);
-        }
 
-        handler(session, event);
+        return handler(session, event) || [];
     }
 }
 

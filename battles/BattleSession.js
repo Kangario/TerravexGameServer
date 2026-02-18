@@ -112,45 +112,45 @@ export class BattleSession {
         this.applyEvents(result.events);
     }
 
-    applyEvents(events) {
-        for (const event of events) {
+    applyEvents(initialEvents) {
 
-            BattleEventDispatcher.apply(this, event);
-            this.events.push(event);
+        const queue = [...initialEvents];
+        const processed = [];
+
+        while (queue.length > 0) {
+
+            const event = queue.shift();
+
+            const newEvents = BattleEventDispatcher.apply(this, event);
+
+            processed.push(event);
+
+            if (newEvents && newEvents.length > 0) {
+
+                queue.push(...newEvents);
+            }
         }
+
+        this.events.push(...processed);
 
         this.broadcast({
             type: "events",
-            events
+            events: processed
         });
 
-        if (events.some(e => e.type === "turn_start")) {
+        // Timer logic
+
+        if (processed.some(e => e.type === "turn_start")) {
 
             clearTimeout(this.timer);
 
             this.timer = setTimeout(() => {
 
                 this.applyEvents([
-                    { 
-                        type: "turn_end"
-                    }
+                    { type: "turn_end" }
                 ]);
 
             }, 40000);
-        }
-        
-        if (events.some(e => e.type === "turn_end")) {
-
-            clearTimeout(this.timer);
-            const units = Array.from(this.state.units.values());
-            this.applyEvents([
-                { 
-                    type: "turn_start",
-                    activeUnitId: this.state.activeUnitId,
-                    initiative: this.state.initiativeQueue,
-                    units: units
-                }
-            ]);
         }
     }
 
