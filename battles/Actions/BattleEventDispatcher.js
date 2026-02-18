@@ -72,8 +72,8 @@ export class BattleEventDispatcher {
 
         turn_start(session, event) {
             console.log("START TURN CALLED",
-                this.activeUnitId,
-                this.initiativeQueue);
+                session.state.activeUnitId,
+                session.state.initiativeQueue);
             session.state.startTurn();
             return [];
         },
