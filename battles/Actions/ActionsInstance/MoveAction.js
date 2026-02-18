@@ -5,6 +5,7 @@ export class MoveAction extends BaseBattleAction {
     validate(session, action) {
 
         if (session.phase === "TURN_START"){
+            
         if (session.state.activeUnitId !== action.unitId) {
             throw new Error("Not active unit");
         }
