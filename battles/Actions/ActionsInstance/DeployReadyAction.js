@@ -4,10 +4,7 @@ export class DeployReadyAction extends BaseBattleAction {
 
     validate(session, action) {
 
-        console.log(
-            typeof session.state.activeUnitId,
-            typeof action.unitId
-        );
+        
         if (session.phase !== "DEPLOYMENT") {
             throw new Error("Not deployment phase");
         }
