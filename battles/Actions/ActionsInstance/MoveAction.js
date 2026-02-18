@@ -19,10 +19,15 @@ export class MoveAction extends BaseBattleAction {
 
         eventLog.push({
             type: "unit_move",
-            unitId: action.unitId,
-            position: [
-                action.position.x,
-                action.position.y]
+            userId: "",
+            units: {
+                [action.unitId]: {
+                    position: [
+                        action.position.x,
+                        action.position.y
+                    ]
+                }
+            }
         });
     }
 }
