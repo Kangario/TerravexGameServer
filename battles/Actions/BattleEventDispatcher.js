@@ -41,6 +41,8 @@ export class BattleEventDispatcher {
                     console.warn("[deployment_player_ready]", unit.x, unit.y);
                 }
             }
+            console.warn("[deployment_player_ready] ", session.deployment.readyPlayers.size);
+            console.warn("[deployment_player_ready] ", session.players.size);
             if (session.deployment.readyPlayers.size === session.players.size) {
                 
                 session.applyEvents([{
