@@ -90,12 +90,14 @@ export class BattleEventDispatcher {
         },
 
         unit_move(session, event) {
+            for (const [unitId, data] of Object.entries(event.units)) {
 
-            session.state.moveUnit(
-                event.unitId,
-                event.position[0],
-                event.position[1]
-            );
+                session.state.moveUnit(
+                    unitId,
+                    data.position[0],
+                    data.position[1]
+                );
+            }
 
             return [];
         },
