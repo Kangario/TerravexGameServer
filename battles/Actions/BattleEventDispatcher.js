@@ -62,7 +62,11 @@ export class BattleEventDispatcher {
             clearTimeout(session.timer);
 
             return [{
-                type: "turn_end"
+                type: "turn_start",
+                duration: 40000,
+                activeUnitId: session.state.activeUnitId,
+                initiative: session.state.initiativeQueue,
+                units: buildUnitsPositionMap(session.state.units)
             }];
         },
 
