@@ -4,15 +4,11 @@ export class MoveAction extends BaseBattleAction {
 
     validate(session, action) {
 
-        console.log(
-            typeof session.state.activeUnitId,
-            typeof action.unitId
-        );
-        console.log("[DeployReadyAction]" + action);
+        const unitId = Number(action.unitId);
         
         if (session.phase === "TURN_START"){
             
-        if (session.state.activeUnitId !== action.unitId) {
+        if (session.state.activeUnitId !== unitId) {
             throw new Error("Not active unit");
         }
         }
