@@ -139,11 +139,11 @@ export class BattleState {
     applyDamage(unitId, targetId)
     {
         const unitIdNumber = Number(unitId);
-
+        const targetIdNumber = Number(targetId);
         const attacker = this.getUnit(unitIdNumber);
         if (!attacker) return null;
 
-        const target = this.getUnit(targetId);
+        const target = this.getUnit(targetIdNumber);
         if (!target) return null;
 
         const damage = attacker.damageP;
