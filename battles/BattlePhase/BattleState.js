@@ -159,7 +159,8 @@ export class BattleState {
     }
 
     moveUnit(unitId, x, y) {
-        const unit = this.getUnit(unitId);
+        const unitIdNumber = Number(unitId);
+        const unit = this.getUnit(unitIdNumber);
         if (!unit) return;
 
         const before = { x: unit.x, y: unit.y };
