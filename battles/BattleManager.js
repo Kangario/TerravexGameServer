@@ -73,6 +73,13 @@ export const BattleManager = {
         } catch (err) {
 
             logErr("handleAction failed:", err);
+
+            if (ws && typeof ws.send === "function") {
+                ws.send(JSON.stringify({
+                    type: "error",
+                    message: err.message
+                }));
+            }
         }
     },
 

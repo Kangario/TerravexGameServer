@@ -6,7 +6,7 @@
     actionCost(actionType, context = {}) {
         switch (actionType) {
             case "move":
-                return context.tiles * 1;
+                return Math.max(1, Math.ceil((context.tiles ?? 0) / 2));
 
             case "attack":
                 return 2;

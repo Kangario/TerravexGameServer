@@ -97,6 +97,16 @@ export class BattleState {
         return this.units.get(this.activeUnitId);
     }
 
+    getUnitByPosition(x, y) {
+        for (const unit of this.units.values()) {
+            if (unit.hp > 0 && unit.x === x && unit.y === y) {
+                return unit;
+            }
+        }
+
+        return null;
+    }
+
     isAlive(unitId) {
         const unitIdTemp = Number(unitId);
         const u = this.units.get(unitIdTemp);
@@ -196,6 +206,26 @@ export class BattleState {
             from: before,
             to: { x, y }
         });
+    }
+
+    spendAp(unitId, amount) {
+        const unitIdNumber = Number(unitId);
+        const apCost = Number(amount);
+        const unit = this.getUnit(unitIdNumber);
+
+        if (!unit) {
+            throw new Error("Unit not found");
+        }
+
+        if (!Number.isFinite(apCost) || apCost <= 0) {
+            throw new Error("Invalid AP cost");
+        }
+
+        if (unit.ap < apCost) {
+            throw new Error("Not enough AP");
+        }
+
+        unit.ap -= apCost;
     }
 
     handleUnitDeath(unitId) {

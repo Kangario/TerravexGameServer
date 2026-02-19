@@ -9,9 +9,9 @@ const mockTerrain = {
 
 describe('CombatRules.actionCost', () => {
 
-    test('move стоит количество тайлов', () => {
+    test('move стоит 1 AP на 2 тайла (округление вверх)', () => {
         const cost = CombatRules.actionCost('move', { tiles: 3 });
-        expect(cost).toBe(3);
+        expect(cost).toBe(2);
     });
 
     test('attack стоит 2', () => {
