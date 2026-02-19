@@ -106,14 +106,20 @@ export class BattleEventDispatcher {
 
         unit_attack(session, event) {
 
-            if (!session.state.isAlive(event.target)) return [];
+            if (!session.state.isAlive(event.target))
+                return [];
 
-            session.state.applyDamage(
+            const result = session.state.applyDamage(
                 event.unitId,
                 event.target
             );
 
-            return [];
+            if (!result) return [];
+
+            return [{
+                type: "damage",
+                ...result
+            }];
         }
     };
 

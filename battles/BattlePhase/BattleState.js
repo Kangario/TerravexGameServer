@@ -136,27 +136,48 @@ export class BattleState {
     // =========================
     // COMBAT
     // =========================
-    applyDamage(untiId,targetId) {
+    applyDamage(unitId, targetId)
+    {
         const unitIdNumber = Number(unitId);
-        const unit = this.getUnit(unitIdNumber);
-        if (!unit) return;
-        const amount = unit.damageP;
-        const targetUnit = this.getUnit(targetId);
-        if (!targetUnit) return;
-        
-        const hpBefore = targetUnit.hp;
-        targetUnit.hp = Math.max(0, targetUnit.hp - amount);
+
+        const attacker = this.getUnit(unitIdNumber);
+        if (!attacker) return null;
+
+        const target = this.getUnit(targetId);
+        if (!target) return null;
+
+        const damage = attacker.damageP;
+
+        const hpBefore = target.hp;
+
+        target.hp = Math.max(0, target.hp - damage);
+
+        const hpAfter = target.hp;
+
+        const isDead = hpAfter === 0;
 
         log("DAMAGE APPLIED", {
+            attacker: unitIdNumber,
             targetId,
-            damage: amount,
+            damage,
             hpBefore,
-            hpAfter: targetUnit.hp
+            hpAfter
         });
 
-        if (targetUnit.hp === 0) {
+        if (isDead)
+        {
             this.handleUnitDeath(targetId);
         }
+
+        // 🔥 возвращаем результат
+        return {
+            attackerId: unitIdNumber,
+            targetId: targetId,
+            damage: damage,
+            hpBefore: hpBefore,
+            hpAfter: hpAfter,
+            isDead: isDead
+        };
     }
 
     moveUnit(unitId, x, y) {
