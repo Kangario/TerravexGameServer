@@ -3,8 +3,9 @@
 export class AttackAction extends BaseBattleAction {
 
     validate(session, action) {
-
-        if (session.state.activeUnitId !== action.unitId) {
+        const unitId = Number(action.unitId);
+        
+        if (session.state.activeUnitId !== unitId) {
             throw new Error("Not active unit");
         }
         
