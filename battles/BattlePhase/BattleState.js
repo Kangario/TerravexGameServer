@@ -98,7 +98,8 @@ export class BattleState {
     }
 
     isAlive(unitId) {
-        const u = this.units.get(unitId);
+        const unitIdTemp = Number(unitId);
+        const u = this.units.get(unitIdTemp);
         return u && u.hp > 0;
     }
 
@@ -158,7 +159,7 @@ export class BattleState {
 
         log("DAMAGE APPLIED", {
             attacker: unitIdNumber,
-            targetId,
+            targetIdNumber,
             damage,
             hpBefore,
             hpAfter
@@ -166,13 +167,13 @@ export class BattleState {
 
         if (isDead)
         {
-            this.handleUnitDeath(targetId);
+            this.handleUnitDeath(targetIdNumber);
         }
 
         // 🔥 возвращаем результат
         return {
             attackerId: unitIdNumber,
-            targetId: targetId,
+            targetId: targetIdNumber,
             damage: damage,
             hpBefore: hpBefore,
             hpAfter: hpAfter,
