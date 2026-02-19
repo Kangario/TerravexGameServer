@@ -81,7 +81,7 @@ export class BattleEventDispatcher {
         turn_end(session, event) {
 
             session.state.endTurn();
-
+            
             return [{
                 type: "turn_start",
                 duration: 40000,
