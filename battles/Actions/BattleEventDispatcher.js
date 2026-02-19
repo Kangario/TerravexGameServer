@@ -120,6 +120,11 @@ export class BattleEventDispatcher {
                 type: "damage",
                 ...result
             }];
+        },
+        
+        damage(session, event) {
+
+            return [];
         }
     };
 
