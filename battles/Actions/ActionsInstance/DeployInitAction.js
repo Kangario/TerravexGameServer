@@ -1,7 +1,7 @@
 ﻿import { BaseBattleAction } from "../BaseBattleAction.js";
 
 const duration = 45000;
-const allowedRows= [[0,1], [37,38]]
+const allowedRows= [[0,1], [38,39]]
 
 export class DeployInitAction extends BaseBattleAction {
     
