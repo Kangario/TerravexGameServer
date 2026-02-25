@@ -68,7 +68,8 @@ export class MoveAction extends BaseBattleAction {
 
     execute({ session, action, eventLog }) {
         session.state.spendAp(action.unitId, action.__apCost);
-
+        const unitTemp = session.state.getUnit(action.unitId);
+        
         eventLog.push({
             type: "unit_move",
             userId: "",
@@ -79,7 +80,9 @@ export class MoveAction extends BaseBattleAction {
                         action.position.y
                     ]
                 }
-            }
+            },
+            unitAp: unitTemp.ap
+            
         });
     }
 }
