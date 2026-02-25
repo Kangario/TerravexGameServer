@@ -47,12 +47,21 @@ export class AttackAction extends BaseBattleAction {
     }
 
     execute({ session, action, eventLog }) {
-        session.state.spendAp(action.unitId, action.__apCost);
+        const unitId = Number(action.unitId);
+        const unit = session.state.getUnit(unitId);
+
+        if (!unit) {
+            throw new Error("Unit not found");
+        }
+
+        session.state.spendAp(unitId, action.__apCost);
+
 
         eventLog.push({
             type: "unit_attack",
             unitId: action.unitId,
-            target: action.targetUnitId
+            target: action.targetUnitId,
+            unitAp: unit.ap
         });
     }
 }
