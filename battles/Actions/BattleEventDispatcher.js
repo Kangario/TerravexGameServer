@@ -81,11 +81,20 @@ export class BattleEventDispatcher {
         turn_end(session, event) {
 
             session.state.endTurn();
+            const unitId = Number(session.state.activeUnitId);
+            const unit = session.state.getUnit(unitId);
+
+            if (!unit) {
+                throw new Error("Unit not found");
+            }
             
+
+
             return [{
                 type: "turn_start",
                 duration: 40000,
                 activeUnitId: session.state.activeUnitId,
+                activeUnitAp: unit.ap,
                 initiative: session.state.initiativeQueue,
                 units: buildUnitsPositionMap(session.state.units)
             }];
