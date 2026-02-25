@@ -67,8 +67,14 @@ export class MoveAction extends BaseBattleAction {
     }
 
     execute({ session, action, eventLog }) {
-        session.state.spendAp(action.unitId, action.__apCost);
-        const unitTemp = session.state.getUnit(action.unitId);
+        const unitId = Number(action.unitId);
+        const unit = session.state.getUnit(unitId);
+
+        if (!unit) {
+            throw new Error("Unit not found");
+        }
+
+        session.state.spendAp(unitId, action.__apCost);
         
         eventLog.push({
             type: "unit_move",
@@ -81,7 +87,7 @@ export class MoveAction extends BaseBattleAction {
                     ]
                 }
             },
-            unitAp: unitTemp.ap
+            unitAp: unit.ap
             
         });
     }
