@@ -128,7 +128,7 @@ export class BattleState {
             apBefore: unit.ap
         });
 
-        unit.resetAP();
+        
     }
 
     endTurn() {
@@ -136,7 +136,8 @@ export class BattleState {
 
         this.initiativeQueue.push(this.initiativeQueue.shift());
         this.activeUnitId = this.initiativeQueue[0];
-
+        const unit = this.getActiveUnit();
+        unit.resetAP();
         log("turn_end", {
             endedUnitId,
             nextActiveUnitId: this.activeUnitId,
