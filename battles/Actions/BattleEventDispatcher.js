@@ -130,9 +130,16 @@ export class BattleEventDispatcher {
             );
 
             if (!result) return [];
+            
+            const unitId = Number(event.unitId);
+            const unit = session.state.getUnit(unitId);
 
+            if (!unit) {
+                throw new Error("Unit not found");
+            }
             return [{
                 type: "damage",
+                unitAp: unit.ap,
                 ...result
             }];
         },
