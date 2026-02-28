@@ -30,10 +30,11 @@ export class UnitState {
         this.ownerId = h.playerId ?? h.ownerId;
 
         this.name = h.name;
-        this.class = h.class;
+        this.gender = h.gender;
 
         this.hp = h.hp;
         this.maxHp = h.maxHp;
+        this.maxAp = h.ap;
         this.ap = h.ap;
         
         this.initiative = h.initiative;
@@ -43,11 +44,14 @@ export class UnitState {
 
         this.defenceP = h.defenceP;
         this.defenceM = h.defenceM;
-
-        this.speed = h.speed;
-        this.attackSpeed = h.attackSpeed;
-
+        
+        this.attackRange = h.attackRange;
+        this.moveCost = h.moveCost;
+            
         this.level = h.level;
+        
+        this.skills = h.skills;
+        this.equipmentSlots = h.equipmentSlots;
         
         if (!h.position) {
             log("WARNING: missing position, defaulting to (0,0)", {
@@ -86,7 +90,7 @@ export class UnitState {
             before: this.ap
         });
 
-        this.ap = 6;
+        this.ap = this.maxAp;
 
         log("resetAP done", {
             unitId: this.id,
@@ -102,7 +106,7 @@ export class UnitState {
             templateId: this.templateId,
             ownerId: this.ownerId,
             name: this.name,
-            classHero: this.class,
+            classHero: this.gender,
             hp: this.hp,
             maxHp: this.maxHp,
             ap: this.ap,
@@ -111,8 +115,11 @@ export class UnitState {
             damageM: this.damageM,
             defenceP: this.defenceP,
             defenceM: this.defenceM,
-            speed: this.speed,
-            attackSpeed: this.attackSpeed,
+            attackRange: this.attackRange,
+            moveCost: this.moveCost,
+
+            skills: this.skills,
+            equipmentSlots: this.equipmentSlots,
             level: this.level,
             x: this.x,
             y: this.y,

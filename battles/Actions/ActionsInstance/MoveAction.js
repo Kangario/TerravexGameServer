@@ -59,7 +59,7 @@ export class MoveAction extends BaseBattleAction {
             throw new Error("Move must change position");
         }
 
-        action.__apCost = CombatRules.actionCost("move", { tiles: distance });
+        action.__apCost = CombatRules.actionCost("move", { tiles: distance, unitMoveCost: unit.moveCost });
 
         if (unit.ap < action.__apCost) {
             throw new Error("Not enough AP for move");

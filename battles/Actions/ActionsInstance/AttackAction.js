@@ -35,7 +35,7 @@ export class AttackAction extends BaseBattleAction {
 
         const distance = Math.abs(attacker.x - target.x) + Math.abs(attacker.y - target.y);
 
-        if (distance > 1) {
+        if (distance > attacker.attackRange) {
             throw new Error("Target is out of attack range");
         }
 
