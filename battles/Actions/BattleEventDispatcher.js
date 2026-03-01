@@ -145,7 +145,19 @@ export class BattleEventDispatcher {
         },
         
         damage(session, event) {
-
+            
+            if (session.state.checkBattleEnd())
+            {
+            return [{
+                type: "end_battle",
+                winnerTeam: session.state.winnerTeam
+            }];
+            }
+            return [];
+        },
+        
+        end_battle(session, event) {
+            
             return [];
         }
     };

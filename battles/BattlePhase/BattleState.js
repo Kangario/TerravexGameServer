@@ -258,11 +258,13 @@ export class BattleState {
         if (teamsAlive.size <= 1) {
             this.finished = true;
             this.winnerTeam = [...teamsAlive][0] ?? null;
-
+            
             log("BATTLE FINISHED", {
                 winnerTeam: this.winnerTeam
             });
+            return true;
         }
+        return false;
     }
 
     // =========================
