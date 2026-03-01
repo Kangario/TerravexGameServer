@@ -9,12 +9,9 @@ export class MoveAction extends BaseBattleAction {
         const targetX = Number(action.position?.x);
         const targetY = Number(action.position?.y);
         const unit = session.state.getUnit(unitId);
-
-        if (session.phase === "TURN_START"){
-            
+        
         if (session.state.activeUnitId !== unitId) {
             throw new Error("Not active unit");
-        }
         }
 
         if (!unit) {
@@ -59,7 +56,10 @@ export class MoveAction extends BaseBattleAction {
             throw new Error("Move must change position");
         }
 
-        action.__apCost = CombatRules.actionCost("move", { tiles: distance, unitMoveCost: unit.moveCost });
+        action.__apCost = CombatRules.actionCost("move", {
+            tiles: distance,
+            unitMoveCost: unit.moveCost
+        });
 
         if (unit.ap < action.__apCost) {
             throw new Error("Not enough AP for move");

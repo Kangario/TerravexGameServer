@@ -106,7 +106,7 @@ export class UnitState {
             templateId: this.templateId,
             ownerId: this.ownerId,
             name: this.name,
-            classHero: this.gender,
+            gender: this.gender,
             hp: this.hp,
             maxHp: this.maxHp,
             ap: this.ap,
@@ -117,7 +117,7 @@ export class UnitState {
             defenceM: this.defenceM,
             attackRange: this.attackRange,
             moveCost: this.moveCost,
-
+            
             skills: this.skills,
             equipmentSlots: this.equipmentSlots,
             level: this.level,

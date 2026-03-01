@@ -6,8 +6,20 @@
     actionCost(actionType, context = {}) {
         switch (actionType) {
             case "move":
-                return Math.max(1, Math.ceil((context.tiles ?? 0) / context.unitMoveCost));
+            {
+                const tiles = Number(context.tiles ?? 0);
+                const unitMoveCost = Number(context.unitMoveCost ?? 2);
 
+                if (!Number.isFinite(tiles) || tiles <= 0) {
+                    return 1;
+                }
+
+                if (!Number.isFinite(unitMoveCost) || unitMoveCost <= 0) {
+                    throw new Error("Invalid unitMoveCost for move action");
+                }
+
+                return Math.max(1, Math.ceil(tiles / unitMoveCost));
+            }
             case "attack":
                 return 2;
 
