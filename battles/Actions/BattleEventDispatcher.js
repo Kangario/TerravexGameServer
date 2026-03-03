@@ -144,11 +144,19 @@ export class BattleEventDispatcher {
             if (!unit) {
                 throw new Error("Unit not found");
             }
+            if (session.state.checkBattleEnd())
+            {
+                return [{
+                    type: "end_battle",
+                    winnerTeam: session.state.winnerTeam
+                }];
+            }else{
             return [{
                 type: "damage",
                 unitAp: unit.ap,
                 ...result
             }];
+            }
         },
         
         damage(session, event) {
