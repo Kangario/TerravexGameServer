@@ -93,8 +93,14 @@ export class BattleEventDispatcher {
             if (!unit) {
                 throw new Error("Unit not found");
             }
-            
 
+            if (session.state.checkBattleEnd())
+            {
+                return [{
+                    type: "end_battle",
+                    winnerTeam: session.state.winnerTeam
+                }];
+            }else{
 
             return [{
                 type: "turn_start",
@@ -104,6 +110,7 @@ export class BattleEventDispatcher {
                 initiative: session.state.initiativeQueue,
                 units: buildUnitsPositionMap(session.state.units)
             }];
+            }
         },
 
         unit_move(session, event) {
@@ -146,18 +153,11 @@ export class BattleEventDispatcher {
         
         damage(session, event) {
             
-            if (session.state.checkBattleEnd())
-            {
-            return [{
-                type: "end_battle",
-                winnerTeam: session.state.winnerTeam
-            }];
-            }
             return [];
         },
         
         end_battle(session, event) {
-            
+            session.finishBattle();
             return [];
         }
     };

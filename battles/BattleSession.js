@@ -4,6 +4,8 @@ import { gsRedis } from "../config/redis.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 
+const REWARDS_SERVER_URL = "https://terravexgamerewards.onrender.com";
+
 function log(stage, data = {}) {
     console.log(
         `[BattleSession][${new Date().toISOString()}] ${stage}`,
@@ -39,6 +41,7 @@ export class BattleSession {
         this.deployment = {readyPlayers: new Set() };
         this.timer = null;
         this.finishedCallback = null;
+        this.battleResultSent = false;
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
@@ -165,17 +168,57 @@ export class BattleSession {
     }
     
     finishBattle() {
+        if (this.battleResultSent) {
+            return;
+        }
+
+        this.battleResultSent = true;
+        
         this.phase = "BATTLE_END";
 
         log("BATTLE FINISH", {
             winnerTeam: this.state.winnerTeam
         });
+        
+        const winners = [];
+        const losers = [];
+
+        for (const [userId, teamId] of this.contexPlayers.entries()) {
+            if (teamId === this.state.winnerTeam) {
+                winners.push(userId);
+            } else {
+                losers.push(userId);
+            }
+        }
+
 
         this.broadcast({
             type: "battle_end",
-            winnerTeam: this.state.winnerTeam
+            winnerTeam: this.state.winnerTeam,
+            winners,
+            losers
         });
 
+        for (const userId of winners) {
+            this.sendToPlayer(userId, {
+                type: "battle_result",
+                result: "win",
+                winnerTeam: this.state.winnerTeam
+            });
+        }
+
+        for (const userId of losers) {
+            this.sendToPlayer(userId, {
+                type: "battle_result",
+                result: "lose",
+                winnerTeam: this.state.winnerTeam
+            });
+        }
+
+        this.enqueueBattleRewards({ winners, losers }).catch((err) => {
+            console.error("[BattleSession] enqueueBattleRewards failed", err);
+        });
+        
         if (this.finishedCallback) {
             log("FINISHED CALLBACK CALLED");
             this.finishedCallback();
@@ -251,6 +294,56 @@ export class BattleSession {
         this.players.forEach(ws => ws.send(msg));
     }
 
+    sendToPlayer(userId, payload) {
+        const ws = this.players.get(userId);
+        if (!ws) {
+            return;
+        }
+
+        ws.send(JSON.stringify(payload));
+    }
+
+    async enqueueBattleRewards({ winners, losers }) {
+        const tasks = [];
+
+        for (const userId of winners) {
+            tasks.push(this.createReward(userId, "battle_win", {
+                matchId: this.snapshot.matchId,
+                winnerTeam: this.state.winnerTeam,
+                outcome: "win"
+            }));
+        }
+
+        for (const userId of losers) {
+            tasks.push(this.createReward(userId, "battle_loss", {
+                matchId: this.snapshot.matchId,
+                winnerTeam: this.state.winnerTeam,
+                outcome: "lose"
+            }));
+        }
+
+        await Promise.allSettled(tasks);
+    }
+
+    async createReward(playerId, rewardType, payload) {
+        const response = await fetch(`${REWARDS_SERVER_URL}/rewards/create`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                playerId,
+                rewardType,
+                payload
+            })
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`Rewards server returned ${response.status}: ${errorBody}`);
+        }
+    }
+    
     // =========================
     // TURN FLOW
     // =========================
