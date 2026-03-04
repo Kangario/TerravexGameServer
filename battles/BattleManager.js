@@ -1,7 +1,9 @@
 import { loadBattleSnapshot } from "./LoadBattleSnapshot.js";
-import {BattleSession} from "./BattleSession.js";
+import { BattleSession } from "./BattleSession.js";
+import { gsRedis, mmRedis } from "../config/redis.js";
 
 const activeBattles = new Map(); // matchId -> Battle
+const MM_MATCH_KEY_PREFIX = process.env.MM_MATCH_KEY_PREFIX || "mm:match:";
 
 function log(...args) {
     console.log("[BattleManager]", ...args);
@@ -9,6 +11,26 @@ function log(...args) {
 
 function logErr(...args) {
     console.error("[BattleManager][ERROR]", ...args);
+}
+
+async function removeBattleFromRedis(matchId) {
+    if (!matchId) {
+        return;
+    }
+
+    const gsKey = `gs:match:${matchId}`;
+    const mmKey = `${MM_MATCH_KEY_PREFIX}${matchId}`;
+
+    await Promise.allSettled([
+        gsRedis.del(gsKey),
+        mmRedis.del(mmKey)
+    ]);
+
+    log("🧹 Removed battle records", {
+        matchId,
+        gsKey,
+        mmKey
+    });
 }
 
 export const BattleManager = {
@@ -23,9 +45,11 @@ export const BattleManager = {
 
         battle = await BattleSession.create(snapshot);
 
-        battle.onFinished(() => {
+        battle.onFinished(async () => {
             activeBattles.delete(matchId);
+            await removeBattleFromRedis(matchId);
         });
+
 
         activeBattles.set(matchId, battle);
 
@@ -64,7 +88,9 @@ export const BattleManager = {
         try {
 
             const battle = this.getBattle(ws);
-
+            if (!battle) {
+                throw new Error("Battle is already finished");
+            }
             battle.handleAction({
                 ...action.action,
                 userId: ws.userId
@@ -104,5 +130,7 @@ export const BattleManager = {
 
         battle.disconnectPlayer(ws.userId);
     }
+    
+    
 
 };
