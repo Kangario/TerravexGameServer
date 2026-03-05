@@ -27,6 +27,7 @@ export class UnitState {
         this.team = h.team;
         
         this.templateId = h.templateId;
+        this.instanceId = h.instanceId ?? h.InstanceId ?? null;
         this.ownerId = h.playerId ?? h.ownerId;
 
         this.name = h.name;
@@ -104,6 +105,7 @@ export class UnitState {
             team: this.team,
             heroId: this.heroId,
             templateId: this.templateId,
+            instanceId: this.instanceId,
             ownerId: this.ownerId,
             name: this.name,
             gender: this.gender,

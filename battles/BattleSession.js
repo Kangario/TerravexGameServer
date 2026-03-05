@@ -1,10 +1,14 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
-import { gsRedis } from "../config/redis.js";
+import { gsRedis, userRedis } from "../config/redis.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 
 const REWARDS_SERVER_URL = "https://terravexgamerewards.onrender.com";
+const WINNER_XP_PER_SURVIVOR = 50;
+const WINNER_GOLD_REWARD = 100;
+const WINNER_RATING_REWARD = 100;
+const LOSER_RATING_PENALTY = 100;
 
 function log(stage, data = {}) {
     console.log(
@@ -305,26 +309,237 @@ export class BattleSession {
 
     async enqueueBattleRewards({ winners, losers }) {
         const tasks = [];
+        const rewardsPlan = this.buildRewardsPlan({ winners, losers });
 
-        for (const userId of winners) {
-            tasks.push(this.createReward(userId, "battle_win", {
+        for (const winnerId of winners) {
+            const reward = rewardsPlan.get(winnerId);
+            if (!reward) continue;
+
+            tasks.push(this.applyRewardsToUserRedis(winnerId, reward));
+            tasks.push(this.createReward(winnerId, "battle_win", {
                 matchId: this.snapshot.matchId,
                 winnerTeam: this.state.winnerTeam,
-                outcome: "win"
+                outcome: "win",
+                rewards: reward
             }));
-        }
 
-        for (const userId of losers) {
-            tasks.push(this.createReward(userId, "battle_loss", {
-                matchId: this.snapshot.matchId,
-                winnerTeam: this.state.winnerTeam,
-                outcome: "lose"
+            for (const loserId of losers) {
+                const reward = rewardsPlan.get(loserId);
+                if (!reward) continue;
+
+                tasks.push(this.applyRewardsToUserRedis(loserId, reward));
+                tasks.push(this.createReward(loserId, "battle_loss", {
+                    matchId: this.snapshot.matchId,
+                    winnerTeam: this.state.winnerTeam,
+                    outcome: "lose",
+                    rewards: reward
             }));
         }
 
         await Promise.allSettled(tasks);
     }
+    }
+    buildRewardsPlan({ winners, losers }) {
+        const aliveUnitsByOwner = this.collectAliveUnitsByOwner();
+        const allUnitsByOwner = this.collectAllUnitsByOwner();
+        const plan = new Map();
 
+        for (const userId of winners) {
+            const aliveUnits = aliveUnitsByOwner.get(userId) || [];
+
+            plan.set(userId, {
+                goldDelta: WINNER_GOLD_REWARD,
+                ratingDelta: WINNER_RATING_REWARD,
+                victoriesDelta: 1,
+                defeatsDelta: 0,
+                survivorXp: aliveUnits.map(unit => ({
+                    heroId: unit.heroId,
+                    instanceId: unit.instanceId,
+                    xpDelta: WINNER_XP_PER_SURVIVOR
+                })),
+                removedHeroes: []
+            });
+        }
+
+        for (const userId of losers) {
+            const allUnits = allUnitsByOwner.get(userId) || [];
+            const aliveUnits = aliveUnitsByOwner.get(userId) || [];
+            const aliveKeys = new Set(aliveUnits.map(unit => unit.identityKey));
+
+            const deadUnits = allUnits.filter(unit => !aliveKeys.has(unit.identityKey));
+
+            plan.set(userId, {
+                goldDelta: 0,
+                ratingDelta: -LOSER_RATING_PENALTY,
+                victoriesDelta: 0,
+                defeatsDelta: 1,
+                survivorXp: [],
+                removedHeroes: deadUnits.map(unit => ({
+                    heroId: unit.heroId,
+                    instanceId: unit.instanceId
+                }))
+            });
+        }
+
+        return plan;
+    }
+
+    collectAliveUnitsByOwner() {
+        const result = new Map();
+
+        for (const unit of this.state.units.values()) {
+            const ownerId = unit.ownerId;
+            if (!ownerId) continue;
+
+            const item = {
+                heroId: unit.id,
+                instanceId: unit.instanceId ?? null,
+                identityKey: this.makeUnitIdentityKey(unit)
+            };
+
+            if (!result.has(ownerId)) {
+                result.set(ownerId, []);
+            }
+
+            result.get(ownerId).push(item);
+        }
+
+        return result;
+    }
+
+    collectAllUnitsByOwner() {
+        const result = new Map();
+
+        for (const unit of this.snapshot.units || []) {
+            const ownerId = unit.playerId ?? unit.ownerId;
+            if (!ownerId) continue;
+
+            const item = {
+                heroId: unit.heroId ?? unit.id ?? unit.Id ?? null,
+                instanceId: unit.instanceId ?? unit.InstanceId ?? null,
+                identityKey: this.makeUnitIdentityKey(unit)
+            };
+
+            if (!result.has(ownerId)) {
+                result.set(ownerId, []);
+            }
+
+            result.get(ownerId).push(item);
+        }
+
+        return result;
+    }
+
+    makeUnitIdentityKey(unit) {
+        const instanceId = unit.instanceId ?? unit.InstanceId ?? null;
+        if (instanceId) {
+            return `instance:${instanceId}`;
+        }
+
+        const heroId = unit.heroId ?? unit.id ?? unit.Id ?? null;
+        if (heroId !== null && heroId !== undefined) {
+            return `hero:${heroId}`;
+        }
+
+        return `fallback:${JSON.stringify(unit)}`;
+    }
+
+    async applyRewardsToUserRedis(userId, reward) {
+        const key = await this.resolveUserRedisKey(userId);
+        const raw = await userRedis.get(key);
+
+        if (!raw) {
+            throw new Error(`User ${userId} not found in userRedis by key ${key}`);
+        }
+
+        const user = JSON.parse(raw);
+
+        user.gold = Number(user.gold || 0) + Number(reward.goldDelta || 0);
+        user.rating = Number(user.rating || 0) + Number(reward.ratingDelta || 0);
+        user.victories = Number(user.victories || 0) + Number(reward.victoriesDelta || 0);
+        user.defeats = Number(user.defeats || 0) + Number(reward.defeatsDelta || 0);
+
+        const arraysToUpdate = ["equipmentHeroes", "heroesBought"];
+
+        for (const arrayName of arraysToUpdate) {
+            const heroes = Array.isArray(user[arrayName]) ? user[arrayName] : [];
+            const survivors = [];
+
+            for (const hero of heroes) {
+                if (this.isHeroRemoved(hero, reward.removedHeroes)) {
+                    continue;
+                }
+
+                const xpDelta = this.getHeroXpDelta(hero, reward.survivorXp);
+                if (xpDelta > 0) {
+                    hero.Xp = Number(hero.Xp || 0) + xpDelta;
+                }
+
+                survivors.push(hero);
+            }
+
+            user[arrayName] = survivors;
+        }
+
+        await userRedis.set(key, JSON.stringify(user));
+    }
+
+    async resolveUserRedisKey(userId) {
+        const candidates = [
+            userId,
+            `user:${userId}`,
+            `users:${userId}`,
+            `profile:${userId}`
+        ];
+
+        for (const key of candidates) {
+            if (!key) continue;
+
+            const exists = await userRedis.exists(key);
+            if (exists) {
+                return key;
+            }
+        }
+
+        return userId;
+    }
+
+    isHeroRemoved(hero, removedHeroes) {
+        return removedHeroes.some((removed) => {
+            const sameInstance =
+                removed.instanceId &&
+                (hero.InstanceId === removed.instanceId || hero.instanceId === removed.instanceId);
+
+            if (sameInstance) {
+                return true;
+            }
+
+            return removed.heroId !== null && removed.heroId !== undefined &&
+                (hero.Id === removed.heroId || hero.id === removed.heroId);
+        });
+    }
+
+    getHeroXpDelta(hero, survivorXp) {
+        for (const reward of survivorXp) {
+            const sameInstance =
+                reward.instanceId &&
+                (hero.InstanceId === reward.instanceId || hero.instanceId === reward.instanceId);
+
+            if (sameInstance) {
+                return reward.xpDelta;
+            }
+
+            if (reward.heroId !== null && reward.heroId !== undefined &&
+                (hero.Id === reward.heroId || hero.id === reward.heroId)) {
+                return reward.xpDelta;
+            }
+        }
+
+        return 0;
+    }
+    
+    
+    
     async createReward(playerId, rewardType, payload) {
         const response = await fetch(`${REWARDS_SERVER_URL}/rewards/create`, {
             method: "POST",
