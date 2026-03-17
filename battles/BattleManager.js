@@ -4,6 +4,7 @@ import { gsRedis, mmRedis } from "../config/redis.js";
 
 const activeBattles = new Map(); // matchId -> Battle
 const MM_MATCH_KEY_PREFIX = process.env.MM_MATCH_KEY_PREFIX || "mm:match:";
+const GS_QUEUE_MATCHES_KEY = process.env.GS_QUEUE_MATCHES_KEY || "gs:queue:matches";
 
 function log(...args) {
     console.log("[BattleManager]", ...args);
@@ -20,16 +21,29 @@ async function removeBattleFromRedis(matchId) {
 
     const gsKey = `gs:match:${matchId}`;
     const mmKey = `${MM_MATCH_KEY_PREFIX}${matchId}`;
-
-    await Promise.allSettled([
+    const queueMembers = [matchId, gsKey, mmKey];
+    const queueType = await gsRedis.type(GS_QUEUE_MATCHES_KEY);
+    const cleanupTasks = [
         gsRedis.del(gsKey),
         mmRedis.del(mmKey)
-    ]);
+    ];
+
+    if (queueType === "zset") {
+        cleanupTasks.push(gsRedis.zRem(GS_QUEUE_MATCHES_KEY, queueMembers));
+    } else if (queueType === "set") {
+        cleanupTasks.push(gsRedis.sRem(GS_QUEUE_MATCHES_KEY, queueMembers));
+    } else if (queueType === "hash") {
+        cleanupTasks.push(gsRedis.hDel(GS_QUEUE_MATCHES_KEY, queueMembers));
+    }
+
+    await Promise.allSettled(cleanupTasks);
 
     log("🧹 Removed battle records", {
         matchId,
         gsKey,
-        mmKey
+        mmKey,
+        queueKey: GS_QUEUE_MATCHES_KEY,
+        queueType
     });
 }
 

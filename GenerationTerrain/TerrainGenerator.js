@@ -1,14 +1,12 @@
 ﻿// battles/terrain/TerrainGenerator.js
 
 import { TerrainGrid } from "./TerrainGrid.js";
-import { generateHeightMap } from "./heightMap.js";
-
 export const TerrainGenerator = {
 
     generate({ width, height, seed }) {
 
-        // 1️⃣ heights
-        const heights = generateHeightMap(width, height, { seed });
+        // Temporary beta override: disable terrain elevation generation.
+        const heights = new Uint8Array(width * height);
 
         // 2️⃣ types (простейшее правило)
         const types = new Uint8Array(width * height);
