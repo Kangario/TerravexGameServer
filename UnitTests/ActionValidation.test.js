@@ -46,7 +46,8 @@ describe('MoveAction rules validation', () => {
                 1: {
                     position: [0, 3]
                 }
-            }
+            },
+            unitAp: 2
         });
     });
 
@@ -121,7 +122,8 @@ describe('AttackAction rules validation', () => {
         expect(eventLog[0]).toEqual({
             type: 'unit_attack',
             unitId: 1,
-            target: 2
+            target: 2,
+            unitAp: 2
         });
     });
 

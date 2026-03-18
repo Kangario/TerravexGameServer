@@ -1,107 +1,151 @@
-import { jest } from '@jest/globals';
+import { jest } from "@jest/globals";
 
-const mockBattle = {
-    addPlayer: jest.fn(),
-    handleTurnActions: jest.fn(),
-    reconnectPlayer: jest.fn(),
-    disconnectPlayer: jest.fn(),
-    onFinished: jest.fn()
+const loadBattleSnapshot = jest.fn();
+const mockCreate = jest.fn();
+const gsRedis = {
+    type: jest.fn(),
+    del: jest.fn(),
+    zRem: jest.fn(),
+    sRem: jest.fn(),
+    hDel: jest.fn()
+};
+const mmRedis = {
+    del: jest.fn()
 };
 
-const mockSnapshot = { state: 'snapshot' };
-
-const loadBattleSnapshot = jest.fn().mockResolvedValue(mockSnapshot);
-
-const BattleFactory = {
-    create: jest.fn(() => mockBattle)
-};
-
-jest.unstable_mockModule('../battles/loadBattleSnapshot.js', () => ({
+jest.unstable_mockModule("../battles/LoadBattleSnapshot.js", () => ({
     loadBattleSnapshot
 }));
 
-jest.unstable_mockModule('../battles/BattleFactory.js', () => ({
-    BattleFactory
+jest.unstable_mockModule("../battles/BattleSession.js", () => ({
+    BattleSession: {
+        create: mockCreate
+    }
+}));
+
+jest.unstable_mockModule("../config/redis.js", () => ({
+    gsRedis,
+    mmRedis
 }));
 
 let BattleManager;
+let battle;
 
 beforeEach(async () => {
-    jest.clearAllMocks();
     jest.resetModules();
+    jest.clearAllMocks();
 
-    ({ BattleManager } = await import('../battles/BattleManager.js'));
+    battle = {
+        addPlayer: jest.fn(),
+        reconnectPlayer: jest.fn(() => true),
+        disconnectPlayer: jest.fn(),
+        ensurePlayerPresence: jest.fn(() => ({ sessionToken: "server-token" })),
+        onFinished: jest.fn(),
+        startBattle: jest.fn()
+    };
+
+    loadBattleSnapshot.mockResolvedValue({ matchId: "m1" });
+    mockCreate.mockResolvedValue(battle);
+    gsRedis.type.mockResolvedValue("none");
+    gsRedis.del.mockResolvedValue(1);
+    gsRedis.zRem.mockResolvedValue(1);
+    gsRedis.sRem.mockResolvedValue(1);
+    gsRedis.hDel.mockResolvedValue(1);
+    mmRedis.del.mockResolvedValue(1);
+
+    ({ BattleManager } = await import("../battles/BattleManager.js"));
 });
 
-describe('getOrCreateBattle', () => {
+test("getOrCreateBattle creates and caches a battle", async () => {
+    const first = await BattleManager.getOrCreateBattle("m1");
+    const second = await BattleManager.getOrCreateBattle("m1");
 
-    test('создаёт battle если нет', async () => {
-        const battle = await BattleManager.getOrCreateBattle('m1');
+    expect(loadBattleSnapshot).toHaveBeenCalledTimes(1);
+    expect(loadBattleSnapshot).toHaveBeenCalledWith("m1");
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(first).toBe(battle);
+    expect(second).toBe(battle);
+});
 
-        expect(loadBattleSnapshot).toHaveBeenCalledWith('m1');
-        expect(BattleFactory.create).toHaveBeenCalledWith('m1', mockSnapshot);
-        expect(battle).toBe(mockBattle);
+test("bindSocket writes matchId, userId and sessionToken", () => {
+    const ws = {};
+
+    BattleManager.bindSocket(ws, {
+        matchId: "m1",
+        userId: "u1",
+        sessionToken: "token-1"
     });
 
-    test('возвращает кеш если уже создан', async () => {
-        await BattleManager.getOrCreateBattle('m2');
-        await BattleManager.getOrCreateBattle('m2');
+    expect(ws).toEqual({
+        matchId: "m1",
+        userId: "u1",
+        sessionToken: "token-1"
+    });
+});
 
-        expect(loadBattleSnapshot).toHaveBeenCalledTimes(1);
+test("handleJoin attaches player and starts battle once battle exists", async () => {
+    const ws = {};
+
+    await BattleManager.handleJoin(ws, {
+        matchId: "m3",
+        userId: "u3"
     });
 
+    expect(battle.addPlayer).toHaveBeenCalledWith("u3", ws);
+    expect(battle.ensurePlayerPresence).toHaveBeenCalledWith("u3");
+    expect(battle.startBattle).toHaveBeenCalledTimes(1);
+    expect(ws.matchId).toBe("m3");
+    expect(ws.userId).toBe("u3");
+    expect(ws.sessionToken).toBe("server-token");
 });
 
-test('bindSocket пишет matchId и userId', () => {
-    const ws = {};
-    BattleManager.bindSocket(ws, { matchId: 'm1', userId: 'u1' });
-
-    expect(ws.matchId).toBe('m1');
-    expect(ws.userId).toBe('u1');
-});
-
-test('handleJoin добавляет игрока', async () => {
-    const ws = {};
-    const msg = { matchId: 'm3', userId: 'u3' };
-
-    await BattleManager.handleJoin(ws, msg);
-
-    expect(mockBattle.addPlayer).toHaveBeenCalledWith('u3', ws);
-    expect(ws.matchId).toBe('m3');
-});
-
-test('handleReconnect вызывает reconnect', async () => {
-    await BattleManager.getOrCreateBattle('m5');
+test("handleReconnect passes session token and rebinds socket on success", async () => {
+    await BattleManager.getOrCreateBattle("m5");
 
     const ws = {};
+
     BattleManager.handleReconnect(ws, {
-        matchId: 'm5',
-        userId: 'u5'
+        matchId: "m5",
+        userId: "u5",
+        sessionToken: "resume-token"
     });
 
-    expect(mockBattle.reconnectPlayer)
-        .toHaveBeenCalledWith(ws, 'u5');
+    expect(battle.reconnectPlayer).toHaveBeenCalledWith(ws, "u5", "resume-token");
+    expect(ws.matchId).toBe("m5");
+    expect(ws.userId).toBe("u5");
 });
 
-test('handleDisconnect вызывает disconnect', async () => {
-    await BattleManager.getOrCreateBattle('m6');
+test("handleReconnect does not bind socket when token is rejected", async () => {
+    await BattleManager.getOrCreateBattle("m6");
+    battle.reconnectPlayer.mockReturnValue(false);
 
-    const ws = { matchId: 'm6', userId: 'u6' };
+    const ws = {};
+
+    BattleManager.handleReconnect(ws, {
+        matchId: "m6",
+        userId: "u6",
+        sessionToken: "bad-token"
+    });
+
+    expect(ws.matchId).toBeUndefined();
+    expect(ws.userId).toBeUndefined();
+});
+
+test("handleDisconnect ignores stale close events and passes socket through", async () => {
+    await BattleManager.getOrCreateBattle("m7");
+
+    const ws = { matchId: "m7", userId: "u7" };
 
     BattleManager.handleDisconnect(ws);
 
-    expect(mockBattle.disconnectPlayer)
-        .toHaveBeenCalledWith('u6');
+    expect(battle.disconnectPlayer).toHaveBeenCalledWith("u7", ws);
 });
 
-test('battle удаляется после onFinished', async () => {
-    await BattleManager.getOrCreateBattle('m7');
+test("battle is removed from cache after onFinished callback", async () => {
+    await BattleManager.getOrCreateBattle("m8");
 
-    const callback = mockBattle.onFinished.mock.calls[0][0];
-    callback();
+    const callback = battle.onFinished.mock.calls[0][0];
+    await callback();
 
-    const ws = { matchId: 'm7' };
-
-    expect(BattleManager.getBattle(ws)).toBeUndefined();
+    expect(BattleManager.getBattle({ matchId: "m8" })).toBeUndefined();
 });
-

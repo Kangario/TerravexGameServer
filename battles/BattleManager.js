@@ -79,10 +79,11 @@ export const BattleManager = {
         return activeBattles.get(ws.matchId);
     },
 
-    bindSocket(ws, { matchId, userId }) {
+    bindSocket(ws, { matchId, userId, sessionToken }) {
 
         ws.matchId = matchId;
         ws.userId = userId;
+        ws.sessionToken = sessionToken ?? ws.sessionToken ?? null;
     },
 
     async handleJoin(ws, msg) {
@@ -91,7 +92,10 @@ export const BattleManager = {
 
         battle.addPlayer(msg.userId, ws);
 
-        this.bindSocket(ws, msg);
+        this.bindSocket(ws, {
+            ...msg,
+            sessionToken: battle.ensurePlayerPresence(msg.userId).sessionToken
+        });
 
         battle.startBattle();
     },
@@ -127,9 +131,21 @@ export const BattleManager = {
 
         const battle = activeBattles.get(msg.matchId);
 
-        if (!battle) return;
+        if (!battle) {
+            if (typeof ws.send === "function") {
+                ws.send(JSON.stringify({
+                    type: "error",
+                    message: "Battle not found for reconnect"
+                }));
+            }
+            return;
+        }
 
-        battle.reconnectPlayer(ws, msg.userId);
+        const reconnected = battle.reconnectPlayer(ws, msg.userId, msg.sessionToken);
+
+        if (!reconnected) {
+            return;
+        }
 
         this.bindSocket(ws, msg);
     },
@@ -142,7 +158,7 @@ export const BattleManager = {
 
         if (!battle) return;
 
-        battle.disconnectPlayer(ws.userId);
+        battle.disconnectPlayer(ws.userId, ws);
     }
     
     

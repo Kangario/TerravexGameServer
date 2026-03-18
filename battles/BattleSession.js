@@ -3,12 +3,16 @@ import { TurnProcessor } from "./TurnController/TurnProcessor.js";
 import { gsRedis, userRedis } from "../config/redis.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
+import { randomUUID } from "crypto";
 
 const REWARDS_SERVER_URL = "https://terravexgamerewards.onrender.com";
 const WINNER_XP_PER_SURVIVOR = 50;
 const WINNER_GOLD_REWARD = 100;
 const WINNER_RATING_REWARD = 100;
 const LOSER_RATING_PENALTY = 100;
+const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 30000);
+const DEPLOYMENT_DURATION_MS = 45000;
+const DEPLOYMENT_ALLOWED_ROWS = [[0, 1], [38, 39]];
 
 function log(stage, data = {}) {
     console.log(
@@ -22,6 +26,7 @@ export class BattleSession {
     static async create(snapshot) {
         const session = new BattleSession(snapshot);
         session.contexPlayers = await session.loadPlayerTeamsMap(snapshot.matchId);
+        session.initializePlayerRegistry();
         return session;
     }
     
@@ -40,18 +45,114 @@ export class BattleSession {
         this.events = [];
         
         this.phase = "INIT";
-        this.players = new Map(); // userId -> ws
+        this.players = new Map(); // userId -> ws | null
+        this.playerPresence = new Map(); // userId -> connection metadata
         this.contexPlayers = new Map();
         this.deployment = {readyPlayers: new Set() };
         this.timer = null;
         this.finishedCallback = null;
         this.battleResultSent = false;
+        this.started = false;
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
             initialPhase: this.phase
         });
         
+    }
+
+    initializePlayerRegistry() {
+        for (const userId of this.contexPlayers.keys()) {
+            this.ensurePlayerPresence(userId);
+            if (!this.players.has(userId)) {
+                this.players.set(userId, null);
+            }
+        }
+    }
+
+    ensurePlayerPresence(userId) {
+        if (!this.playerPresence.has(userId)) {
+            this.playerPresence.set(userId, {
+                connected: false,
+                sessionToken: randomUUID(),
+                reconnectDeadlineAt: null,
+                disconnectTimer: null
+            });
+        }
+
+        return this.playerPresence.get(userId);
+    }
+
+    clearDisconnectTimer(userId) {
+        const presence = this.playerPresence.get(userId);
+        if (!presence?.disconnectTimer) {
+            return;
+        }
+
+        clearTimeout(presence.disconnectTimer);
+        presence.disconnectTimer = null;
+    }
+
+    attachSocket(userId, ws) {
+        const previousSocket = this.players.get(userId);
+        const presence = this.ensurePlayerPresence(userId);
+
+        this.clearDisconnectTimer(userId);
+        presence.connected = true;
+        presence.reconnectDeadlineAt = null;
+
+        this.players.set(userId, ws);
+
+        if (previousSocket && previousSocket !== ws && typeof previousSocket.close === "function") {
+            try {
+                previousSocket.close(4001, "Replaced by a newer connection");
+            } catch (err) {
+                log("FAILED TO CLOSE PREVIOUS SOCKET", {
+                    userId,
+                    error: err.message
+                });
+            }
+        }
+    }
+
+    buildBattleInitPayload(userId) {
+        const teamId = this.contexPlayers.get(userId);
+        const presence = this.ensurePlayerPresence(userId);
+
+        return {
+            type: "battle_init",
+            teamId,
+            phase: this.phase,
+            state: this.state.toClientState(),
+            reconnect: {
+                sessionToken: presence.sessionToken,
+                graceMs: RECONNECT_GRACE_MS
+            },
+            players: this.getPlayersConnectionState()
+        };
+    }
+
+    getPlayersConnectionState() {
+        return [...this.contexPlayers.keys()].map((userId) => {
+            const presence = this.ensurePlayerPresence(userId);
+
+            return {
+                userId,
+                connected: presence.connected,
+                reconnectDeadlineAt: presence.reconnectDeadlineAt
+            };
+        });
+    }
+
+    broadcastPlayerConnectionState(userId) {
+        const presence = this.ensurePlayerPresence(userId);
+
+        this.broadcast({
+            type: "player_connection",
+            userId,
+            connected: presence.connected,
+            reconnectDeadlineAt: presence.reconnectDeadlineAt
+        });
     }
 
     async loadPlayerTeamsMap(matchId) {
@@ -105,8 +206,26 @@ export class BattleSession {
     // LIFECYCLE
     // =========================
     startBattle() {
+        if (this.started) {
+            return;
+        }
+
+        this.started = true;
+
         log("BATTLE START");
         this.startDeployment();
+    }
+
+    startDeployment() {
+        if (this.phase !== "INIT") {
+            return;
+        }
+
+        this.applyEvents([{
+            type: "DEPLOYMENT",
+            duration: DEPLOYMENT_DURATION_MS,
+            allowedRows: DEPLOYMENT_ALLOWED_ROWS
+        }]);
     }
 
     handleAction(action) {
@@ -238,64 +357,116 @@ export class BattleSession {
     // PLAYERS
     // =========================
     addPlayer(userId, ws) {
-        
-        this.players.set(userId, ws);
+        const teamId = this.contexPlayers.get(userId);
+        if (teamId === undefined) {
+            log("INVALID TEAM ID", { userId });
+            return this.reject(userId, "You are not part of this match");
+        }
+
+        this.attachSocket(userId, ws);
         log("PLAYER ADDED", {
             userId,
-            totalPlayers: this.players.size
+            totalPlayers: this.players.size,
+            connectedPlayers: this.getConnectedPlayersCount()
         });
-        const teamId = this.contexPlayers.get(userId);
-        if (teamId === undefined) {
-            log("INVALID TEAM ID", { userId });
-            return this.reject(userId, "You are not part of this match");
-        }
-        ws.send(JSON.stringify({
-            type: "battle_init",
-            teamId,
-            state: this.state.toClientState()
-        }));
+
+        this.sendToSocket(ws, this.buildBattleInitPayload(userId));
+        this.broadcastPlayerConnectionState(userId);
     }
 
-    reconnectPlayer(ws, userId) {
-        this.players.set(userId, ws);
+    reconnectPlayer(ws, userId, sessionToken) {
         const teamId = this.contexPlayers.get(userId);
         if (teamId === undefined) {
             log("INVALID TEAM ID", { userId });
             return this.reject(userId, "You are not part of this match");
         }
+
+        const presence = this.ensurePlayerPresence(userId);
+        if (!sessionToken || sessionToken !== presence.sessionToken) {
+            this.sendToSocket(ws, {
+                type: "error",
+                message: "Reconnect rejected: invalid session token"
+            });
+            return false;
+        }
+
+        if (presence.reconnectDeadlineAt && Date.now() > presence.reconnectDeadlineAt) {
+            this.sendToSocket(ws, {
+                type: "error",
+                message: "Reconnect rejected: reconnect window expired"
+            });
+            return false;
+        }
+
+        this.attachSocket(userId, ws);
+
         log("PLAYER RECONNECTED", {
             userId,
-            totalPlayers: this.players.size
+            totalPlayers: this.players.size,
+            connectedPlayers: this.getConnectedPlayersCount()
         });
-        ws.send(JSON.stringify({
-            type: "battle_init",
-            teamId,
-            state: this.state.toClientState()
-        }));
+
+        this.sendToSocket(ws, this.buildBattleInitPayload(userId));
+        this.broadcastPlayerConnectionState(userId);
+        return true;
     }
 
-    disconnectPlayer(userId) {
-        this.players.delete(userId);
+    disconnectPlayer(userId, ws) {
         const teamId = this.contexPlayers.get(userId);
         if (teamId === undefined) {
             log("INVALID TEAM ID", { userId });
             return this.reject(userId, "You are not part of this match");
         }
+
+        const currentSocket = this.players.get(userId);
+        if (currentSocket && ws && currentSocket !== ws) {
+            return;
+        }
+
+        const presence = this.ensurePlayerPresence(userId);
+
+        this.players.set(userId, null);
+        presence.connected = false;
+        presence.reconnectDeadlineAt = Date.now() + RECONNECT_GRACE_MS;
+        this.clearDisconnectTimer(userId);
+        presence.disconnectTimer = setTimeout(() => {
+            const latestPresence = this.ensurePlayerPresence(userId);
+            latestPresence.disconnectTimer = null;
+
+            if (latestPresence.connected) {
+                return;
+            }
+
+            latestPresence.reconnectDeadlineAt = Date.now();
+            this.broadcast({
+                type: "player_reconnect_expired",
+                userId
+            });
+        }, RECONNECT_GRACE_MS);
+
         log("PLAYER DISCONNECTED", {
             userId,
             teamId,
-            totalPlayers: this.players.size
+            totalPlayers: this.players.size,
+            connectedPlayers: this.getConnectedPlayersCount(),
+            reconnectDeadlineAt: presence.reconnectDeadlineAt
         });
+
+        this.broadcastPlayerConnectionState(userId);
     }
 
     broadcast(payload) {
         log("BROADCAST", {
             type: payload.type,
-            players: this.players.size
+            players: this.getConnectedPlayersCount()
         });
 
         const msg = JSON.stringify(payload);
-        this.players.forEach(ws => ws.send(msg));
+        this.players.forEach((ws) => {
+            if (ws) {
+                this.sendRaw(ws, msg);
+            }
+        });
     }
 
     sendToPlayer(userId, payload) {
@@ -304,7 +475,37 @@ export class BattleSession {
             return;
         }
 
-        ws.send(JSON.stringify(payload));
+        this.sendToSocket(ws, payload);
+    }
+
+    sendToSocket(ws, payload) {
+        this.sendRaw(ws, JSON.stringify(payload));
+    }
+
+    sendRaw(ws, rawPayload) {
+        if (!ws || typeof ws.send !== "function") {
+            return;
+        }
+
+        try {
+            ws.send(rawPayload);
+        } catch (err) {
+            log("SEND FAILED", {
+                error: err.message
+            });
+        }
+    }
+
+    getConnectedPlayersCount() {
+        let count = 0;
+
+        for (const ws of this.players.values()) {
+            if (ws) {
+                count += 1;
+            }
+        }
+
+        return count;
     }
 
     async enqueueBattleRewards({ winners, losers }) {
