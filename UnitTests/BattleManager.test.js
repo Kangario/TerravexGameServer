@@ -105,7 +105,7 @@ test("handleReconnect passes session token and rebinds socket on success", async
     const ws = {};
 
     await BattleManager.handleReconnect(ws, {
-        matchId: "mm:match:m5",
+        matchId: "m5",
         userId: "u5",
         sessionToken: "resume-token"
     });
@@ -141,7 +141,7 @@ test("handleDisconnect ignores stale close events and passes socket through", as
     expect(battle.disconnectPlayer).toHaveBeenCalledWith("u7", ws);
 });
 
-test("handleJoin normalizes prefixed match ids", async () => {
+test("handleJoin keeps canonical match id unchanged", async () => {
     const ws = {};
 
     await BattleManager.handleJoin(ws, {
@@ -149,8 +149,8 @@ test("handleJoin normalizes prefixed match ids", async () => {
         userId: "u9"
     });
 
-    expect(loadBattleSnapshot).toHaveBeenCalledWith("m9");
-    expect(ws.matchId).toBe("m9");
+    expect(loadBattleSnapshot).toHaveBeenCalledWith("mm:match:m9");
+    expect(ws.matchId).toBe("mm:match:m9");
 });
 
 test("battle is removed from cache after onFinished callback", async () => {
