@@ -13,6 +13,7 @@ const LOSER_RATING_PENALTY = 100;
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS || 30000);
 const DEPLOYMENT_DURATION_MS = 45000;
 const DEPLOYMENT_ALLOWED_ROWS = [[0, 1], [38, 39]];
+const TURN_DURATION_MS = 40000;
 
 function log(stage, data = {}) {
     console.log(
@@ -53,6 +54,9 @@ export class BattleSession {
         this.finishedCallback = null;
         this.battleResultSent = false;
         this.started = false;
+        this.phaseTimerKind = null;
+        this.phaseDeadlineAt = null;
+        this.phaseDurationMs = null;
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
@@ -128,7 +132,77 @@ export class BattleSession {
                 sessionToken: presence.sessionToken,
                 graceMs: RECONNECT_GRACE_MS
             },
-            players: this.getPlayersConnectionState()
+            players: this.getPlayersConnectionState(),
+            timeline: this.buildTimelinePayload(),
+            deployment: this.buildDeploymentPayload(),
+            turn: this.buildTurnPayload()
+        };
+    }
+
+    setPhaseWindow(kind, durationMs) {
+        if (!durationMs) {
+            this.phaseTimerKind = null;
+            this.phaseDeadlineAt = null;
+            this.phaseDurationMs = null;
+            return;
+        }
+
+        this.phaseTimerKind = kind;
+        this.phaseDurationMs = durationMs;
+        this.phaseDeadlineAt = Date.now() + durationMs;
+    }
+
+    clearPhaseWindow() {
+        this.phaseTimerKind = null;
+        this.phaseDeadlineAt = null;
+        this.phaseDurationMs = null;
+    }
+
+    getRemainingPhaseTimeMs() {
+        if (!this.phaseDeadlineAt) {
+            return null;
+        }
+
+        return Math.max(0, this.phaseDeadlineAt - Date.now());
+    }
+
+    buildTimelinePayload() {
+        return {
+            phase: this.phase,
+            timerKind: this.phaseTimerKind,
+            serverNow: Date.now(),
+            durationMs: this.phaseDurationMs,
+            deadlineAt: this.phaseDeadlineAt,
+            remainingMs: this.getRemainingPhaseTimeMs()
+        };
+    }
+
+    buildDeploymentPayload() {
+        if (this.phase !== "DEPLOYMENT") {
+            return null;
+        }
+
+        return {
+            allowedRows: DEPLOYMENT_ALLOWED_ROWS,
+            durationMs: this.phaseDurationMs ?? DEPLOYMENT_DURATION_MS,
+            deadlineAt: this.phaseDeadlineAt,
+            remainingMs: this.getRemainingPhaseTimeMs()
+        };
+    }
+
+    buildTurnPayload() {
+        if (this.phase !== "AWAIT_TURN_ACTIONS") {
+            return null;
+        }
+
+        const activeUnit = this.state.getActiveUnit();
+
+        return {
+            activeUnitId: this.state.activeUnitId,
+            activeUnitAp: activeUnit?.ap ?? 0,
+            durationMs: this.phaseDurationMs ?? TURN_DURATION_MS,
+            deadlineAt: this.phaseDeadlineAt,
+            remainingMs: this.getRemainingPhaseTimeMs()
         };
     }
 
@@ -269,6 +343,7 @@ export class BattleSession {
         if (processed.some(e => e.type === "turn_start")) {
 
             clearTimeout(this.timer);
+            this.setPhaseWindow("turn", TURN_DURATION_MS);
 
             this.timer = setTimeout(() => {
 
@@ -276,7 +351,7 @@ export class BattleSession {
                     { type: "turn_end" }
                 ]);
 
-            }, 40000);
+            }, TURN_DURATION_MS);
         }
     }
 
@@ -298,6 +373,7 @@ export class BattleSession {
         this.battleResultSent = true;
         
         this.phase = "BATTLE_END";
+        this.clearPhaseWindow();
 
         log("BATTLE FINISH", {
             winnerTeam: this.state.winnerTeam

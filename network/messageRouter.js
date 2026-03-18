@@ -37,7 +37,7 @@ export const messageRouter = {
 
                     log("➡️ ROUTE → BattleManager.handleReconnect");
 
-                    BattleManager.handleReconnect(ws, msg);
+                    await BattleManager.handleReconnect(ws, msg);
 
                     break;
 

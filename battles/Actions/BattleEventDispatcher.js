@@ -9,6 +9,7 @@ export class BattleEventDispatcher {
             if (session.phase !== "INIT") return [];
 
             session.phase = "DEPLOYMENT";
+            session.setPhaseWindow("deployment", event.duration);
             session.deployment.readyPlayers.clear();
 
             if (!session.timer) {
@@ -60,6 +61,7 @@ export class BattleEventDispatcher {
         deployment_end(session, event) {
 
             clearTimeout(session.timer);
+            session.clearPhaseWindow();
             const unitId = Number(session.state.activeUnitId);
             const unit = session.state.getUnit(unitId);
 

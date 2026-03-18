@@ -5,6 +5,7 @@ import { gsRedis, mmRedis } from "../config/redis.js";
 const activeBattles = new Map(); // matchId -> Battle
 const MM_MATCH_KEY_PREFIX = process.env.MM_MATCH_KEY_PREFIX || "mm:match:";
 const GS_QUEUE_MATCHES_KEY = process.env.GS_QUEUE_MATCHES_KEY || "gs:queue:matches";
+const GS_MATCH_KEY_PREFIX = "gs:match:";
 
 function log(...args) {
     console.log("[BattleManager]", ...args);
@@ -47,25 +48,42 @@ async function removeBattleFromRedis(matchId) {
     });
 }
 
+function normalizeMatchId(matchId) {
+    if (!matchId) {
+        return matchId;
+    }
+
+    if (matchId.startsWith(MM_MATCH_KEY_PREFIX)) {
+        return matchId.slice(MM_MATCH_KEY_PREFIX.length);
+    }
+
+    if (matchId.startsWith(GS_MATCH_KEY_PREFIX)) {
+        return matchId.slice(GS_MATCH_KEY_PREFIX.length);
+    }
+
+    return matchId;
+}
+
 export const BattleManager = {
 
     async getOrCreateBattle(matchId) {
+        const normalizedMatchId = normalizeMatchId(matchId);
 
-        let battle = activeBattles.get(matchId);
+        let battle = activeBattles.get(normalizedMatchId);
 
         if (battle) return battle;
 
-        const snapshot = await loadBattleSnapshot(matchId);
+        const snapshot = await loadBattleSnapshot(normalizedMatchId);
 
         battle = await BattleSession.create(snapshot);
 
         battle.onFinished(async () => {
-            activeBattles.delete(matchId);
-            await removeBattleFromRedis(matchId);
+            activeBattles.delete(normalizedMatchId);
+            await removeBattleFromRedis(normalizedMatchId);
         });
 
 
-        activeBattles.set(matchId, battle);
+        activeBattles.set(normalizedMatchId, battle);
 
         return battle;
     },
@@ -80,20 +98,23 @@ export const BattleManager = {
     },
 
     bindSocket(ws, { matchId, userId, sessionToken }) {
+        const normalizedMatchId = normalizeMatchId(matchId);
 
-        ws.matchId = matchId;
+        ws.matchId = normalizedMatchId;
         ws.userId = userId;
         ws.sessionToken = sessionToken ?? ws.sessionToken ?? null;
     },
 
     async handleJoin(ws, msg) {
 
-        const battle = await this.getOrCreateBattle(msg.matchId);
+        const normalizedMatchId = normalizeMatchId(msg.matchId);
+        const battle = await this.getOrCreateBattle(normalizedMatchId);
 
         battle.addPlayer(msg.userId, ws);
 
         this.bindSocket(ws, {
             ...msg,
+            matchId: normalizedMatchId,
             sessionToken: battle.ensurePlayerPresence(msg.userId).sessionToken
         });
 
@@ -127,9 +148,16 @@ export const BattleManager = {
         }
     },
 
-    handleReconnect(ws, msg) {
+    async handleReconnect(ws, msg) {
+        const normalizedMatchId = normalizeMatchId(msg.matchId);
 
-        const battle = activeBattles.get(msg.matchId);
+        let battle;
+
+        try {
+            battle = await this.getOrCreateBattle(normalizedMatchId);
+        } catch (err) {
+            battle = null;
+        }
 
         if (!battle) {
             if (typeof ws.send === "function") {
@@ -147,7 +175,10 @@ export const BattleManager = {
             return;
         }
 
-        this.bindSocket(ws, msg);
+        this.bindSocket(ws, {
+            ...msg,
+            matchId: normalizedMatchId
+        });
     },
 
     handleDisconnect(ws) {

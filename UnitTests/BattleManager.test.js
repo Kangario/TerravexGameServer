@@ -104,8 +104,8 @@ test("handleReconnect passes session token and rebinds socket on success", async
 
     const ws = {};
 
-    BattleManager.handleReconnect(ws, {
-        matchId: "m5",
+    await BattleManager.handleReconnect(ws, {
+        matchId: "mm:match:m5",
         userId: "u5",
         sessionToken: "resume-token"
     });
@@ -121,7 +121,7 @@ test("handleReconnect does not bind socket when token is rejected", async () => 
 
     const ws = {};
 
-    BattleManager.handleReconnect(ws, {
+    await BattleManager.handleReconnect(ws, {
         matchId: "m6",
         userId: "u6",
         sessionToken: "bad-token"
@@ -139,6 +139,18 @@ test("handleDisconnect ignores stale close events and passes socket through", as
     BattleManager.handleDisconnect(ws);
 
     expect(battle.disconnectPlayer).toHaveBeenCalledWith("u7", ws);
+});
+
+test("handleJoin normalizes prefixed match ids", async () => {
+    const ws = {};
+
+    await BattleManager.handleJoin(ws, {
+        matchId: "mm:match:m9",
+        userId: "u9"
+    });
+
+    expect(loadBattleSnapshot).toHaveBeenCalledWith("m9");
+    expect(ws.matchId).toBe("m9");
 });
 
 test("battle is removed from cache after onFinished callback", async () => {

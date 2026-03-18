@@ -77,6 +77,8 @@ describe("BattleSession reconnect flow", () => {
         expect(payload.teamId).toBe(1);
         expect(payload.reconnect.sessionToken).toBeTruthy();
         expect(payload.reconnect.graceMs).toBeGreaterThan(0);
+        expect(payload.timeline.phase).toBe("INIT");
+        expect(payload.timeline.serverNow).toBeGreaterThan(0);
     });
 
     test("disconnect keeps player slot and reconnect restores latest socket", () => {
@@ -120,5 +122,27 @@ describe("BattleSession reconnect flow", () => {
             type: "error",
             message: "Reconnect rejected: invalid session token"
         });
+    });
+
+    test("reconnect battle_init includes current phase timer data", () => {
+        const session = new BattleSession(createSnapshot());
+        session.contexPlayers = new Map([
+            ["u1", 1],
+            ["u2", 2]
+        ]);
+        session.initializePlayerRegistry();
+        session.phase = "AWAIT_TURN_ACTIONS";
+        session.setPhaseWindow("turn", 40000);
+
+        const ws = createSocket();
+        const token = session.ensurePlayerPresence("u1").sessionToken;
+        const ok = session.reconnectPlayer(ws, "u1", token);
+
+        expect(ok).toBe(true);
+
+        const payload = JSON.parse(ws.send.mock.calls[0][0]);
+        expect(payload.turn).toBeTruthy();
+        expect(payload.turn.activeUnitId).toBe(101);
+        expect(payload.turn.remainingMs).toBeGreaterThanOrEqual(0);
     });
 });
