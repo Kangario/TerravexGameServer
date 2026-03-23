@@ -123,9 +123,11 @@ export class BattleSession {
     buildBattleInitPayload(userId) {
         const teamId = this.contexPlayers.get(userId);
         const presence = this.ensurePlayerPresence(userId);
+        const mode = this.snapshot.mode ?? "PVP";
 
         return {
             type: "battle_init",
+            mode,
             teamId,
             phase: this.phase,
             state: this.state.toClientState(),
@@ -133,10 +135,40 @@ export class BattleSession {
                 sessionToken: presence.sessionToken,
                 graceMs: RECONNECT_GRACE_MS
             },
+            playersMeta: this.buildPlayersMetaPayload(),
+            pve: this.buildPveInitPayload(),
             players: this.getPlayersConnectionState(),
             timeline: this.buildTimelinePayload(),
             deployment: this.buildDeploymentPayload(),
             turn: this.buildTurnPayload()
+        };
+    }
+
+    buildPlayersMetaPayload() {
+        if (!Array.isArray(this.snapshot.players)) {
+            return [];
+        }
+
+        return this.snapshot.players.map((player) => ({
+            userId: player.userId,
+            username: player.username ?? null,
+            teamId: player.teamId,
+            rating: player.rating ?? null,
+            level: player.level ?? null,
+            isBot: Boolean(player.isBot)
+        }));
+    }
+
+    buildPveInitPayload() {
+        if ((this.snapshot.mode ?? "PVP") !== "PVE") {
+            return null;
+        }
+
+        return {
+            enemyPlayer: this.snapshot.pve?.enemyPlayer ?? null,
+            creatures: Array.isArray(this.snapshot.pve?.creatures)
+                ? this.snapshot.pve.creatures
+                : []
         };
     }
 

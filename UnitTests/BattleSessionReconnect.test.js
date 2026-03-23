@@ -5,6 +5,11 @@ function createSnapshot() {
     return {
         matchId: "match-1",
         seed: 1,
+        mode: "PVP",
+        players: [
+            { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
+            { userId: "u2", username: "Alex", teamId: 2, rating: 1520, level: 11 }
+        ],
         terrain: { width: 15, height: 40 },
         units: [
             {
@@ -79,6 +84,26 @@ describe("BattleSession reconnect flow", () => {
         expect(payload.reconnect.graceMs).toBeGreaterThan(0);
         expect(payload.timeline.phase).toBe("INIT");
         expect(payload.timeline.serverNow).toBeGreaterThan(0);
+        expect(payload.mode).toBe("PVP");
+        expect(payload.pve).toBeNull();
+        expect(payload.playersMeta).toEqual([
+            {
+                userId: "u1",
+                username: "Mike",
+                teamId: 1,
+                rating: 1500,
+                level: 10,
+                isBot: false
+            },
+            {
+                userId: "u2",
+                username: "Alex",
+                teamId: 2,
+                rating: 1520,
+                level: 11,
+                isBot: false
+            }
+        ]);
     });
 
     test("disconnect keeps player slot and reconnect restores latest socket", () => {
@@ -144,5 +169,53 @@ describe("BattleSession reconnect flow", () => {
         expect(payload.turn).toBeTruthy();
         expect(payload.turn.activeUnitId).toBe(101);
         expect(payload.turn.remainingMs).toBeGreaterThanOrEqual(0);
+    });
+
+    test("pve init includes creatures summary for client rendering", () => {
+        const snapshot = {
+            ...createSnapshot(),
+            mode: "PVE",
+            players: [
+                { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
+                { userId: "bot:u1", username: "Arena Bot", teamId: 2, rating: 1500, level: 10, isBot: true }
+            ],
+            pve: {
+                enemyPlayer: {
+                    userId: "bot:u1",
+                    username: "Arena Bot",
+                    teamId: 2,
+                    isBot: true
+                },
+                creatures: [
+                    { type: "Скелет", count: 2 },
+                    { type: "Лучник", count: 1 }
+                ]
+            }
+        };
+
+        const session = new BattleSession(snapshot);
+        session.contexPlayers = new Map([
+            ["u1", 1],
+            ["bot:u1", 2]
+        ]);
+        session.initializePlayerRegistry();
+
+        const ws = createSocket();
+        session.addPlayer("u1", ws);
+
+        const payload = JSON.parse(ws.send.mock.calls[0][0]);
+        expect(payload.mode).toBe("PVE");
+        expect(payload.pve).toEqual({
+            enemyPlayer: {
+                userId: "bot:u1",
+                username: "Arena Bot",
+                teamId: 2,
+                isBot: true
+            },
+            creatures: [
+                { type: "Скелет", count: 2 },
+                { type: "Лучник", count: 1 }
+            ]
+        });
     });
 });
