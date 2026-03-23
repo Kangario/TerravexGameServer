@@ -57,6 +57,7 @@ export class BattleSession {
         this.phaseTimerKind = null;
         this.phaseDeadlineAt = null;
         this.phaseDurationMs = null;
+        this.pendingBattleEndDeadUnitIds = [];
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
@@ -381,6 +382,7 @@ export class BattleSession {
         
         const winners = [];
         const losers = [];
+        const deadUnitIds = [...new Set(this.pendingBattleEndDeadUnitIds)];
 
         for (const [userId, teamId] of this.contexPlayers.entries()) {
             if (teamId === this.state.winnerTeam) {
@@ -395,8 +397,11 @@ export class BattleSession {
             type: "battle_end",
             winnerTeam: this.state.winnerTeam,
             winners,
-            losers
+            losers,
+            ...(deadUnitIds.length > 0 ? { deadUnitIds } : {})
         });
+
+        this.pendingBattleEndDeadUnitIds = [];
 
         for (const userId of winners) {
             this.sendToPlayer(userId, {
