@@ -286,4 +286,63 @@ describe("BattleSession reconnect flow", () => {
             }
         ]);
     });
+
+    test("server-controlled pve bot moves toward player and attacks in range", () => {
+        const snapshot = {
+            ...createSnapshot(),
+            mode: "PVE",
+            players: [
+                { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
+                { userId: "bot:skelet", username: "Skelet", BotType: "Skelet", teamId: 2, rating: 0, level: 1, isBot: true }
+            ],
+            units: [
+                {
+                    heroId: 101,
+                    playerId: "u1",
+                    team: 1,
+                    hp: 100,
+                    maxHp: 100,
+                    ap: 4,
+                    initiative: 5,
+                    damageP: 15,
+                    damageM: 0,
+                    defenceP: 5,
+                    defenceM: 2,
+                    attackRange: 1,
+                    moveCost: 1,
+                    position: { x: 0, y: 0 }
+                },
+                {
+                    heroId: 303,
+                    playerId: "bot:skelet",
+                    team: 2,
+                    hp: 90,
+                    maxHp: 90,
+                    ap: 4,
+                    initiative: 10,
+                    damageP: 14,
+                    damageM: 0,
+                    defenceP: 3,
+                    defenceM: 1,
+                    attackRange: 1,
+                    moveCost: 1,
+                    position: { x: 0, y: 3 }
+                }
+            ]
+        };
+
+        const session = new BattleSession(snapshot);
+        session.contexPlayers = session.buildPlayerTeamsMap(snapshot.players);
+        session.initializePlayerRegistry();
+
+        session.runServerControlledTurn("bot:skelet");
+
+        const botUnit = [...session.state.units.values()].find((unit) => unit.ownerId === "bot:skelet");
+        const playerUnit = [...session.state.units.values()].find((unit) => unit.ownerId === "u1");
+
+        expect(botUnit.x).toBe(0);
+        expect(botUnit.y).toBe(1);
+        expect(playerUnit.hp).toBe(86);
+        expect(botUnit.ap).toBe(0);
+    });
 });

@@ -1,6 +1,7 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
 import { userRedis } from "../config/redis.js";
+import { CombatRules } from "./CombatRules.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 import { randomUUID } from "crypto";
@@ -372,11 +373,15 @@ export class BattleSession {
 
     getPreferredMovePosition(unit, target) {
         const candidates = [
-            { x: unit.x + Math.sign(target.x - unit.x), y: unit.y },
-            { x: unit.x, y: unit.y + Math.sign(target.y - unit.y) },
-            { x: unit.x - Math.sign(target.x - unit.x), y: unit.y },
-            { x: unit.x, y: unit.y - Math.sign(target.y - unit.y) }
-        ];
+            { x: unit.x + 1, y: unit.y },
+            { x: unit.x - 1, y: unit.y },
+            { x: unit.x, y: unit.y + 1 },
+            { x: unit.x, y: unit.y - 1 }
+        ].sort((left, right) => {
+            const leftDistance = Math.abs(left.x - target.x) + Math.abs(left.y - target.y);
+            const rightDistance = Math.abs(right.x - target.x) + Math.abs(right.y - target.y);
+            return leftDistance - rightDistance;
+        });
 
         for (const candidate of candidates) {
             if (candidate.x === unit.x && candidate.y === unit.y) {
@@ -405,52 +410,58 @@ export class BattleSession {
     }
 
     runServerControlledTurn(userId) {
-        const activeUnit = this.state.getActiveUnit();
-        if (!activeUnit || activeUnit.ownerId !== userId || this.state.finished) {
-            return;
-        }
+        const attackCost = CombatRules.actionCost("attack");
+        let stepsLeft = 16;
 
-        const target = this.findNearestEnemyUnit(activeUnit);
-        if (!target) {
-            return;
-        }
+        while (stepsLeft > 0 && !this.state.finished) {
+            stepsLeft -= 1;
 
-        const distance = Math.abs(activeUnit.x - target.x) + Math.abs(activeUnit.y - target.y);
+            const activeUnit = this.state.getActiveUnit();
+            if (!activeUnit || activeUnit.ownerId !== userId) {
+                break;
+            }
 
-        if (distance <= activeUnit.attackRange && activeUnit.ap > 0) {
-            this.handleAction({
-                type: "unit_attack",
-                userId,
-                unitId: activeUnit.id,
-                targetUnitId: target.id
-            });
-        } else if (activeUnit.ap > 0) {
-            const movePosition = this.getPreferredMovePosition(activeUnit, target);
-            if (movePosition) {
+            const target = this.findNearestEnemyUnit(activeUnit);
+            if (!target) {
+                break;
+            }
+
+            const distance = Math.abs(activeUnit.x - target.x) + Math.abs(activeUnit.y - target.y);
+
+            if (distance <= activeUnit.attackRange) {
+                if (activeUnit.ap < attackCost) {
+                    break;
+                }
+
                 this.handleAction({
-                    type: "unit_move",
+                    type: "unit_attack",
                     userId,
                     unitId: activeUnit.id,
-                    position: movePosition
+                    targetUnitId: target.id
                 });
+                continue;
             }
 
-            const refreshedUnit = this.state.getUnit(activeUnit.id);
-            const refreshedTarget = this.state.getUnit(target.id);
-            if (refreshedUnit && refreshedTarget) {
-                const refreshedDistance =
-                    Math.abs(refreshedUnit.x - refreshedTarget.x) +
-                    Math.abs(refreshedUnit.y - refreshedTarget.y);
+            const moveCost = CombatRules.actionCost("move", {
+                tiles: 1,
+                unitMoveCost: activeUnit.moveCost
+            });
 
-                if (refreshedDistance <= refreshedUnit.attackRange && refreshedUnit.ap > 0) {
-                    this.handleAction({
-                        type: "unit_attack",
-                        userId,
-                        unitId: refreshedUnit.id,
-                        targetUnitId: refreshedTarget.id
-                    });
-                }
+            if (activeUnit.ap < moveCost) {
+                break;
             }
+
+            const movePosition = this.getPreferredMovePosition(activeUnit, target);
+            if (!movePosition) {
+                break;
+            }
+
+            this.handleAction({
+                type: "unit_move",
+                userId,
+                unitId: activeUnit.id,
+                position: movePosition
+            });
         }
 
         if (!this.state.finished) {
