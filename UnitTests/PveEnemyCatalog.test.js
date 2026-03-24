@@ -33,6 +33,7 @@ describe("PveEnemyCatalog", () => {
         expect(normalized.players[1]).toMatchObject({
             userId: "bot:skelet",
             username: "Skelet",
+            BotType: "Skelet",
             teamId: 2,
             isBot: true
         });
@@ -46,6 +47,7 @@ describe("PveEnemyCatalog", () => {
             enemyPlayer: {
                 userId: "bot:skelet",
                 username: "Skelet",
+                BotType: "Skelet",
                 teamId: 2,
                 isBot: true
             },
@@ -59,7 +61,7 @@ describe("PveEnemyCatalog", () => {
         const pve = buildPveInitData({
             players: [
                 { userId: "u1", teamId: 1 },
-                { userId: "bot:skelet", username: "Skelet", teamId: 2, isBot: true }
+                { userId: "bot:skelet", username: "Skelet", BotType: "Skelet", teamId: 2, isBot: true }
             ],
             units: [
                 { heroId: 1, playerId: "bot:skelet", team: 2, name: "Skelet" },
@@ -72,6 +74,7 @@ describe("PveEnemyCatalog", () => {
             enemyPlayer: {
                 userId: "bot:skelet",
                 username: "Skelet",
+                BotType: "Skelet",
                 teamId: 2,
                 isBot: true
             },

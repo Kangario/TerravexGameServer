@@ -26,6 +26,7 @@ function buildSkeletEnemy({ ownerId, teamId, nextHeroId }) {
         player: {
             userId: ownerId,
             username: "Skelet",
+            BotType: "Skelet",
             teamId,
             rating: 0,
             level: 1,
@@ -89,6 +90,7 @@ export function buildPveInitData({ players, units }) {
         enemyPlayer: botPlayer ? {
             userId: botPlayer.userId,
             username: botPlayer.username ?? null,
+            BotType: botPlayer.BotType ?? botPlayer.username ?? null,
             teamId: botPlayer.teamId,
             isBot: Boolean(botPlayer.isBot)
         } : null,
@@ -134,6 +136,8 @@ export function normalizePveMatch(match) {
         if (!hasBotUnits) {
             units.push(...template.units);
         }
+    } else if (!botPlayer.BotType) {
+        botPlayer.BotType = String(templateKey);
     }
 
     const pve = buildPveInitData({ players, units });

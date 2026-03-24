@@ -177,12 +177,13 @@ describe("BattleSession reconnect flow", () => {
             mode: "PVE",
             players: [
                 { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
-                { userId: "bot:u1", username: "Arena Bot", teamId: 2, rating: 1500, level: 10, isBot: true }
+                { userId: "bot:u1", username: "Arena Bot", BotType: "Skelet", teamId: 2, rating: 1500, level: 10, isBot: true }
             ],
             pve: {
                 enemyPlayer: {
                     userId: "bot:u1",
                     username: "Arena Bot",
+                    BotType: "Skelet",
                     teamId: 2,
                     isBot: true
                 },
@@ -205,18 +206,22 @@ describe("BattleSession reconnect flow", () => {
 
         const payload = JSON.parse(ws.send.mock.calls[0][0]);
         expect(payload.mode).toBe("PVE");
-        expect(payload.pve).toEqual({
-            enemyPlayer: {
-                userId: "bot:u1",
-                username: "Arena Bot",
-                teamId: 2,
-                isBot: true
+        expect(payload.pve).toBeNull();
+        expect(payload.playersMeta).toEqual([
+            {
+                userId: "u1",
+                username: "Mike",
+                teamId: 1,
+                rating: 1500,
+                level: 10,
+                isBot: false
             },
-            creatures: [
-                { type: "Скелет", count: 2 },
-                { type: "Лучник", count: 1 }
-            ]
-        });
+            {
+                userId: "bot:u1",
+                teamId: 2,
+                BotType: "Skelet"
+            }
+        ]);
     });
 
     test("server-controlled pve opponent is marked connected without socket", () => {
@@ -225,12 +230,13 @@ describe("BattleSession reconnect flow", () => {
             mode: "PVE",
             players: [
                 { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
-                { userId: "bot:skelet", username: "Skelet", teamId: 2, rating: 0, level: 1, isBot: true }
+                { userId: "bot:skelet", username: "Skelet", BotType: "Skelet", teamId: 2, rating: 0, level: 1, isBot: true }
             ],
             pve: {
                 enemyPlayer: {
                     userId: "bot:skelet",
                     username: "Skelet",
+                    BotType: "Skelet",
                     teamId: 2,
                     isBot: true
                 },

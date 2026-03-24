@@ -52,6 +52,8 @@ export class BattleState {
             unitsCount: snapshot.units.length
         });
 
+        const usedRuntimeIds = new Set();
+
         snapshot.units.forEach((unit, index) => {
             if (!unit) {
                 throw new Error(`BattleState: unit[${index}] is undefined`);
@@ -64,6 +66,8 @@ export class BattleState {
             });
 
             const state = UnitState.fromSnapshot(unit);
+            state.id = this.resolveRuntimeUnitId(state, index, usedRuntimeIds);
+            usedRuntimeIds.add(state.id);
 
             this.units.set(state.id, state);
             this.initiativeQueue.push(state.id);
@@ -84,6 +88,33 @@ export class BattleState {
             initiativeOrder: [...this.initiativeQueue],
             activeUnitId: this.activeUnitId
         });
+    }
+
+    resolveRuntimeUnitId(unit, index, usedRuntimeIds) {
+        const directCandidates = [
+            unit.id,
+            unit.instanceId,
+            unit.heroId
+        ];
+
+        for (const candidate of directCandidates) {
+            if (candidate === null || candidate === undefined || candidate === "") {
+                continue;
+            }
+
+            const numericCandidate = Number(candidate);
+            if (Number.isInteger(numericCandidate) && !usedRuntimeIds.has(numericCandidate)) {
+                return numericCandidate;
+            }
+        }
+
+        let fallbackId = Math.max(1, Number(unit.heroId) || 1);
+
+        while (usedRuntimeIds.has(fallbackId)) {
+            fallbackId += 1 + index;
+        }
+
+        return fallbackId;
     }
 
     // =========================

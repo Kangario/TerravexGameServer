@@ -23,7 +23,8 @@ export class UnitState {
             initiative: h.initiative
         });
 
-        this.id = h.heroId;
+        this.heroId = h.heroId ?? h.id ?? h.Id ?? null;
+        this.id = h.id ?? this.heroId;
         this.team = h.team;
         
         this.templateId = h.templateId;

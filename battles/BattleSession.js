@@ -180,27 +180,28 @@ export class BattleSession {
             return [];
         }
 
-        return this.snapshot.players.map((player) => ({
-            userId: player.userId,
-            username: player.username ?? null,
-            teamId: player.teamId,
-            rating: player.rating ?? null,
-            level: player.level ?? null,
-            isBot: Boolean(player.isBot)
-        }));
+        return this.snapshot.players.map((player) => {
+            if (player?.isBot) {
+                return {
+                    userId: player.userId,
+                    teamId: player.teamId,
+                    BotType: player.BotType ?? this.snapshot.pve?.enemyPlayer?.BotType ?? player.username ?? null
+                };
+            }
+
+            return {
+                userId: player.userId,
+                username: player.username ?? null,
+                teamId: player.teamId,
+                rating: player.rating ?? null,
+                level: player.level ?? null,
+                isBot: false
+            };
+        });
     }
 
     buildPveInitPayload() {
-        if ((this.snapshot.mode ?? "PVP") !== "PVE") {
-            return null;
-        }
-
-        return {
-            enemyPlayer: this.snapshot.pve?.enemyPlayer ?? null,
-            creatures: Array.isArray(this.snapshot.pve?.creatures)
-                ? this.snapshot.pve.creatures
-                : []
-        };
+        return null;
     }
 
     setPhaseWindow(kind, durationMs) {
@@ -892,7 +893,7 @@ export class BattleSession {
             if (!ownerId) continue;
 
             const item = {
-                heroId: unit.id,
+                heroId: unit.heroId,
                 instanceId: unit.instanceId ?? null,
                 identityKey: this.makeUnitIdentityKey(unit)
             };
