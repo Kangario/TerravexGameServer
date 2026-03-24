@@ -1,6 +1,6 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
-import { gsRedis, userRedis } from "../config/redis.js";
+import { userRedis } from "../config/redis.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 import { randomUUID } from "crypto";
@@ -26,7 +26,7 @@ export class BattleSession {
 
     static async create(snapshot) {
         const session = new BattleSession(snapshot);
-        session.contexPlayers = await session.loadPlayerTeamsMap(snapshot.matchId);
+        session.contexPlayers = session.buildPlayerTeamsMap(snapshot.players);
         session.initializePlayerRegistry();
         return session;
     }
@@ -67,12 +67,43 @@ export class BattleSession {
     }
 
     initializePlayerRegistry() {
-        for (const userId of this.contexPlayers.keys()) {
-            this.ensurePlayerPresence(userId);
+        for (const [userId] of this.contexPlayers.entries()) {
+            const presence = this.ensurePlayerPresence(userId);
+            if (this.isServerControlledUser(userId)) {
+                presence.connected = true;
+                presence.reconnectDeadlineAt = null;
+            }
+
             if (!this.players.has(userId)) {
                 this.players.set(userId, null);
             }
         }
+    }
+
+    buildPlayerTeamsMap(players) {
+        if (!Array.isArray(players)) {
+            throw new Error("BattleSession: snapshot.players must be array");
+        }
+
+        const map = new Map();
+
+        for (const player of players) {
+            if (!player?.userId) {
+                throw new Error("BattleSession: player userId is required");
+            }
+
+            if (typeof player.teamId !== "number") {
+                throw new Error(`BattleSession: teamId is required for user ${player.userId}`);
+            }
+
+            if (map.has(player.userId)) {
+                throw new Error(`BattleSession: duplicate userId ${player.userId}`);
+            }
+
+            map.set(player.userId, player.teamId);
+        }
+
+        return map;
     }
 
     ensurePlayerPresence(userId) {
@@ -262,53 +293,202 @@ export class BattleSession {
         });
     }
 
-    async loadPlayerTeamsMap(matchId) {
-        if (!matchId) {
-            throw new Error("loadPlayerTeamsMap: matchId is required");
-        }
-
-        const redisKey = `gs:match:${matchId}`;
-
-        const raw = await gsRedis.get(redisKey);
-        if (!raw) {
-            throw new Error(`Match ${matchId} not found in Redis`);
-        }
-
-        let match;
-        try {
-            match = JSON.parse(raw);
-        } catch (err) {
-            throw new Error(`Invalid JSON for match ${matchId}`);
-        }
-
-        if (!Array.isArray(match.players)) {
-            throw new Error(`Match ${matchId} has no players array`);
-        }
-
-        const map = new Map();
-
-        for (const player of match.players) {
-            if (!player?.userId) {
-                throw new Error(`Invalid player entry in match ${matchId}`);
-            }
-
-            if (typeof player.teamId !== "number") {
-                throw new Error(
-                    `Missing teamId for user ${player.userId} in match ${matchId}`
-                );
-            }
-
-            if (map.has(player.userId)) {
-                throw new Error(
-                    `Duplicate userId ${player.userId} in match ${matchId}`
-                );
-            }
-
-            map.set(player.userId, player.teamId);
-        }
-
-        return map;
+    isServerControlledUser(userId) {
+        return this.snapshot.players?.some((player) => player?.userId === userId && player?.isBot) ?? false;
     }
+
+    getServerControlledUserIds() {
+        return [...this.contexPlayers.keys()].filter((userId) => this.isServerControlledUser(userId));
+    }
+
+    getUnitsByOwner(userId) {
+        const units = [];
+
+        for (const unit of this.state.units.values()) {
+            if (unit.ownerId === userId) {
+                units.push(unit);
+            }
+        }
+
+        return units;
+    }
+
+    buildServerControlledDeployment(userId) {
+        const units = this.getUnitsByOwner(userId);
+        const result = {};
+
+        for (const unit of units) {
+            result[unit.id] = {
+                position: [unit.x, unit.y]
+            };
+        }
+
+        return result;
+    }
+
+    queueServerControlledDeployment() {
+        if ((this.snapshot.mode ?? "PVP") !== "PVE" || this.phase !== "DEPLOYMENT") {
+            return;
+        }
+
+        for (const userId of this.getServerControlledUserIds()) {
+            if (this.deployment.readyPlayers.has(userId)) {
+                continue;
+            }
+
+            setTimeout(() => {
+                if (this.phase !== "DEPLOYMENT" || this.deployment.readyPlayers.has(userId)) {
+                    return;
+                }
+
+                this.handleAction({
+                    type: "deploy_ready",
+                    userId,
+                    units: this.buildServerControlledDeployment(userId)
+                });
+            }, 0);
+        }
+    }
+
+    findNearestEnemyUnit(unit) {
+        let nearestTarget = null;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+
+        for (const candidate of this.state.units.values()) {
+            if (candidate.team === unit.team) {
+                continue;
+            }
+
+            const distance = Math.abs(unit.x - candidate.x) + Math.abs(unit.y - candidate.y);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestTarget = candidate;
+            }
+        }
+
+        return nearestTarget;
+    }
+
+    getPreferredMovePosition(unit, target) {
+        const candidates = [
+            { x: unit.x + Math.sign(target.x - unit.x), y: unit.y },
+            { x: unit.x, y: unit.y + Math.sign(target.y - unit.y) },
+            { x: unit.x - Math.sign(target.x - unit.x), y: unit.y },
+            { x: unit.x, y: unit.y - Math.sign(target.y - unit.y) }
+        ];
+
+        for (const candidate of candidates) {
+            if (candidate.x === unit.x && candidate.y === unit.y) {
+                continue;
+            }
+
+            const outOfBounds =
+                candidate.x < 0 ||
+                candidate.y < 0 ||
+                candidate.x >= this.state.terrain.width ||
+                candidate.y >= this.state.terrain.height;
+
+            if (outOfBounds) {
+                continue;
+            }
+
+            const occupied = this.state.getUnitByPosition(candidate.x, candidate.y);
+            if (occupied && occupied.id !== unit.id) {
+                continue;
+            }
+
+            return candidate;
+        }
+
+        return null;
+    }
+
+    runServerControlledTurn(userId) {
+        const activeUnit = this.state.getActiveUnit();
+        if (!activeUnit || activeUnit.ownerId !== userId || this.state.finished) {
+            return;
+        }
+
+        const target = this.findNearestEnemyUnit(activeUnit);
+        if (!target) {
+            return;
+        }
+
+        const distance = Math.abs(activeUnit.x - target.x) + Math.abs(activeUnit.y - target.y);
+
+        if (distance <= activeUnit.attackRange && activeUnit.ap > 0) {
+            this.handleAction({
+                type: "unit_attack",
+                userId,
+                unitId: activeUnit.id,
+                targetUnitId: target.id
+            });
+        } else if (activeUnit.ap > 0) {
+            const movePosition = this.getPreferredMovePosition(activeUnit, target);
+            if (movePosition) {
+                this.handleAction({
+                    type: "unit_move",
+                    userId,
+                    unitId: activeUnit.id,
+                    position: movePosition
+                });
+            }
+
+            const refreshedUnit = this.state.getUnit(activeUnit.id);
+            const refreshedTarget = this.state.getUnit(target.id);
+            if (refreshedUnit && refreshedTarget) {
+                const refreshedDistance =
+                    Math.abs(refreshedUnit.x - refreshedTarget.x) +
+                    Math.abs(refreshedUnit.y - refreshedTarget.y);
+
+                if (refreshedDistance <= refreshedUnit.attackRange && refreshedUnit.ap > 0) {
+                    this.handleAction({
+                        type: "unit_attack",
+                        userId,
+                        unitId: refreshedUnit.id,
+                        targetUnitId: refreshedTarget.id
+                    });
+                }
+            }
+        }
+
+        if (!this.state.finished) {
+            this.handleAction({
+                type: "turn_end",
+                userId
+            });
+        }
+    }
+
+    queueServerControlledTurn() {
+        if ((this.snapshot.mode ?? "PVP") !== "PVE") {
+            return;
+        }
+
+        const activeUnit = this.state.getActiveUnit();
+        if (!activeUnit || !this.isServerControlledUser(activeUnit.ownerId)) {
+            return;
+        }
+
+        setTimeout(() => {
+            this.runServerControlledTurn(activeUnit.ownerId);
+        }, 150);
+    }
+
+    postEventAutomation(processed) {
+        if ((this.snapshot.mode ?? "PVP") !== "PVE") {
+            return;
+        }
+
+        if (processed.some((event) => event.type === "DEPLOYMENT" || event.type === "deployment_player_ready")) {
+            this.queueServerControlledDeployment();
+        }
+
+        if (processed.some((event) => event.type === "turn_start")) {
+            this.queueServerControlledTurn();
+        }
+    }
+
     // =========================
     // LIFECYCLE
     // =========================
@@ -386,6 +566,8 @@ export class BattleSession {
 
             }, TURN_DURATION_MS);
         }
+
+        this.postEventAutomation(processed);
     }
 
     setTimeTurn(value){
@@ -525,6 +707,10 @@ export class BattleSession {
     }
 
     disconnectPlayer(userId, ws) {
+        if (this.isServerControlledUser(userId)) {
+            return;
+        }
+
         const teamId = this.contexPlayers.get(userId);
         if (teamId === undefined) {
             log("INVALID TEAM ID", { userId });

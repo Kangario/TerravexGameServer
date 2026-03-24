@@ -218,4 +218,66 @@ describe("BattleSession reconnect flow", () => {
             ]
         });
     });
+
+    test("server-controlled pve opponent is marked connected without socket", () => {
+        const snapshot = {
+            ...createSnapshot(),
+            mode: "PVE",
+            players: [
+                { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
+                { userId: "bot:skelet", username: "Skelet", teamId: 2, rating: 0, level: 1, isBot: true }
+            ],
+            pve: {
+                enemyPlayer: {
+                    userId: "bot:skelet",
+                    username: "Skelet",
+                    teamId: 2,
+                    isBot: true
+                },
+                creatures: [
+                    { type: "Skelet", count: 1 }
+                ]
+            },
+            units: [
+                createSnapshot().units[0],
+                {
+                    heroId: 303,
+                    playerId: "bot:skelet",
+                    team: 2,
+                    hp: 90,
+                    maxHp: 90,
+                    ap: 4,
+                    initiative: 8,
+                    damageP: 14,
+                    damageM: 0,
+                    defenceP: 3,
+                    defenceM: 1,
+                    attackRange: 1,
+                    moveCost: 1,
+                    position: { x: 7, y: 38 }
+                }
+            ]
+        };
+
+        const session = new BattleSession(snapshot);
+        session.contexPlayers = session.buildPlayerTeamsMap(snapshot.players);
+        session.initializePlayerRegistry();
+
+        const ws = createSocket();
+        session.addPlayer("u1", ws);
+
+        const payload = JSON.parse(ws.send.mock.calls[0][0]);
+        expect(payload.players).toEqual([
+            {
+                userId: "u1",
+                connected: true,
+                reconnectDeadlineAt: null
+            },
+            {
+                userId: "bot:skelet",
+                connected: true,
+                reconnectDeadlineAt: null
+            }
+        ]);
+    });
 });
