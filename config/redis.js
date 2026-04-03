@@ -22,10 +22,18 @@ export async function initRedis() {
     gsRedis.on("error", (err) => console.error("GS Redis error:", err));
     mmRedis.on("error", (err) => console.error("MM Redis error:", err));
     userRedis.on("error", (err) => console.error("userRedis error:", err));
-    
-    await gsRedis.connect();
-    await mmRedis.connect();
-    await userRedis.connect();
+
+    if (!gsRedis.isOpen) {
+        await gsRedis.connect();
+    }
+
+    if (!mmRedis.isOpen) {
+        await mmRedis.connect();
+    }
+
+    if (!userRedis.isOpen) {
+        await userRedis.connect();
+    }
     
     console.log("✅ Connected to Redis");
 }
