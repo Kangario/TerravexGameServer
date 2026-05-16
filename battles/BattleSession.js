@@ -6,8 +6,8 @@ import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
 import { randomUUID } from "crypto";
 
-const REWARDS_SERVER_URL = "https://terravexgamerewards.onrender.com";
-const WINNER_XP_PER_SURVIVOR = 50;
+const REWARDS_SERVER_URL = "https://terravexgamerewards-254547110109.europe-west1.run.app";
+const XP_PER_KILL = 50;
 const WINNER_GOLD_REWARD = 100;
 const WINNER_RATING_REWARD = 100;
 const LOSER_RATING_PENALTY = 100;
@@ -59,6 +59,7 @@ export class BattleSession {
         this.phaseDeadlineAt = null;
         this.phaseDurationMs = null;
         this.pendingBattleEndDeadUnitIds = [];
+        this.unitKillCounts = new Map();
         
         log("CONSTRUCTOR END", {
             matchId: snapshot.matchId,
@@ -313,6 +314,26 @@ export class BattleSession {
         }
 
         return units;
+    }
+
+    recordUnitKill(attackerId, targetId) {
+        const attacker = this.state.getUnit(Number(attackerId));
+        if (!attacker || this.isServerControlledUser(attacker.ownerId)) {
+            return;
+        }
+
+        const current = this.unitKillCounts.get(attacker.id) || {
+            unitId: attacker.id,
+            heroId: attacker.heroId,
+            instanceId: attacker.instanceId ?? null,
+            ownerId: attacker.ownerId,
+            kills: 0,
+            killedUnitIds: []
+        };
+
+        current.kills += 1;
+        current.killedUnitIds.push(Number(targetId));
+        this.unitKillCounts.set(attacker.id, current);
     }
 
     buildServerControlledDeployment(userId) {
@@ -824,6 +845,8 @@ export class BattleSession {
         const rewardsPlan = this.buildRewardsPlan({ winners, losers });
 
         for (const winnerId of winners) {
+            if (this.isServerControlledUser(winnerId)) continue;
+
             const reward = rewardsPlan.get(winnerId);
             if (!reward) continue;
 
@@ -834,41 +857,48 @@ export class BattleSession {
                 outcome: "win",
                 rewards: reward
             }));
+        }
 
-            for (const loserId of losers) {
-                const reward = rewardsPlan.get(loserId);
-                if (!reward) continue;
+        for (const loserId of losers) {
+            if (this.isServerControlledUser(loserId)) continue;
 
-                tasks.push(this.applyRewardsToUserRedis(loserId, reward));
-                tasks.push(this.createReward(loserId, "battle_loss", {
-                    matchId: this.snapshot.matchId,
-                    winnerTeam: this.state.winnerTeam,
-                    outcome: "lose",
-                    rewards: reward
+            const reward = rewardsPlan.get(loserId);
+            if (!reward) continue;
+
+            tasks.push(this.applyRewardsToUserRedis(loserId, reward));
+            tasks.push(this.createReward(loserId, "battle_loss", {
+                matchId: this.snapshot.matchId,
+                winnerTeam: this.state.winnerTeam,
+                outcome: "lose",
+                rewards: reward
             }));
         }
 
-        await Promise.allSettled(tasks);
+        const results = await Promise.allSettled(tasks);
+        for (const result of results) {
+            if (result.status === "rejected") {
+                log("BATTLE REWARD TASK FAILED", {
+                    error: result.reason?.message ?? String(result.reason)
+                });
+            }
+        }
     }
-    }
+
     buildRewardsPlan({ winners, losers }) {
         const aliveUnitsByOwner = this.collectAliveUnitsByOwner();
         const allUnitsByOwner = this.collectAllUnitsByOwner();
+        const killXpByOwner = this.collectKillXpByOwner();
         const plan = new Map();
 
         for (const userId of winners) {
-            const aliveUnits = aliveUnitsByOwner.get(userId) || [];
+            const killXp = killXpByOwner.get(userId) || [];
 
             plan.set(userId, {
                 goldDelta: WINNER_GOLD_REWARD,
                 ratingDelta: WINNER_RATING_REWARD,
                 victoriesDelta: 1,
                 defeatsDelta: 0,
-                survivorXp: aliveUnits.map(unit => ({
-                    heroId: unit.heroId,
-                    instanceId: unit.instanceId,
-                    xpDelta: WINNER_XP_PER_SURVIVOR
-                })),
+                killXp,
                 removedHeroes: []
             });
         }
@@ -885,7 +915,7 @@ export class BattleSession {
                 ratingDelta: -LOSER_RATING_PENALTY,
                 victoriesDelta: 0,
                 defeatsDelta: 1,
-                survivorXp: [],
+                killXp: killXpByOwner.get(userId) || [],
                 removedHeroes: deadUnits.map(unit => ({
                     heroId: unit.heroId,
                     instanceId: unit.instanceId
@@ -894,6 +924,31 @@ export class BattleSession {
         }
 
         return plan;
+    }
+
+    collectKillXpByOwner() {
+        const result = new Map();
+
+        for (const killData of this.unitKillCounts.values()) {
+            if (!killData.ownerId || killData.kills <= 0) {
+                continue;
+            }
+
+            if (!result.has(killData.ownerId)) {
+                result.set(killData.ownerId, []);
+            }
+
+            result.get(killData.ownerId).push({
+                heroId: killData.heroId,
+                instanceId: killData.instanceId,
+                unitId: killData.unitId,
+                kills: killData.kills,
+                killedUnitIds: [...killData.killedUnitIds],
+                xpDelta: killData.kills * XP_PER_KILL
+            });
+        }
+
+        return result;
     }
 
     collectAliveUnitsByOwner() {
@@ -982,7 +1037,7 @@ export class BattleSession {
                     continue;
                 }
 
-                const xpDelta = this.getHeroXpDelta(hero, reward.survivorXp);
+                const xpDelta = this.getHeroXpDelta(hero, reward.killXp);
                 if (xpDelta > 0) {
                     hero.Xp = Number(hero.Xp || 0) + xpDelta;
                 }
@@ -1031,8 +1086,8 @@ export class BattleSession {
         });
     }
 
-    getHeroXpDelta(hero, survivorXp) {
-        for (const reward of survivorXp) {
+    getHeroXpDelta(hero, heroXpRewards = []) {
+        for (const reward of heroXpRewards) {
             const sameInstance =
                 reward.instanceId &&
                 (hero.InstanceId === reward.instanceId || hero.instanceId === reward.instanceId);
@@ -1069,6 +1124,8 @@ export class BattleSession {
             const errorBody = await response.text();
             throw new Error(`Rewards server returned ${response.status}: ${errorBody}`);
         }
+
+        return response.json();
     }
     
     // =========================

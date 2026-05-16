@@ -148,6 +148,7 @@ export class BattleEventDispatcher {
             }
             if (result.isDead) {
                 session.pendingBattleEndDeadUnitIds.push(result.targetId);
+                session.recordUnitKill(result.attackerId, result.targetId);
             }
 
             if (session.state.finished) {
