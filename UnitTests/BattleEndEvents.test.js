@@ -9,6 +9,7 @@ function createSnapshot() {
         units: [
             {
                 heroId: 101,
+                name: "Gargonruk",
                 playerId: "u1",
                 team: 1,
                 hp: 100,
@@ -85,6 +86,7 @@ function createPveWinSnapshot() {
             {
                 heroId: 101,
                 instanceId: "hero-instance-101",
+                Name: "Gargonruk",
                 playerId: "u1",
                 team: 1,
                 hp: 100,
@@ -196,6 +198,9 @@ describe("Battle end event contract", () => {
             heroId: 101,
             instanceId: null,
             unitId: 101,
+            Name: "Gargonruk",
+            HeroName: "Gargonruk",
+            DisplayName: "Gargonruk",
             kills: 2,
             killedUnitIds: [202, 303],
             xpDelta: 100
@@ -215,12 +220,14 @@ describe("Battle end event contract", () => {
             losers: ["bot:skelet"]
         });
 
-        expect(plan.get("u1").killXp).toEqual([{
+        expect(plan.get("u1").killXp).toEqual([]);
+        expect(plan.get("u1").survivorXp).toEqual([{
             heroId: 101,
             instanceId: "hero-instance-101",
             unitId: 101,
-            kills: 0,
-            killedUnitIds: [],
+            Name: "Gargonruk",
+            HeroName: "Gargonruk",
+            DisplayName: "Gargonruk",
             xpDelta: 50,
             source: "pve_win"
         }]);

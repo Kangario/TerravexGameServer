@@ -328,6 +328,7 @@ export class BattleSession {
             heroId: attacker.heroId,
             instanceId: attacker.instanceId ?? null,
             ownerId: attacker.ownerId,
+            ...this.buildUnitNamePayload(attacker),
             kills: 0,
             killedUnitIds: []
         };
@@ -885,14 +886,12 @@ export class BattleSession {
         const aliveUnitsByOwner = this.collectAliveUnitsByOwner();
         const allUnitsByOwner = this.collectAllUnitsByOwner();
         const killXpByOwner = this.collectKillXpByOwner();
-        const pveWinXpByOwner = this.collectPveWinXpByOwner(winners);
+        const survivorXpByOwner = this.collectPveWinXpByOwner(winners);
         const plan = new Map();
 
         for (const userId of winners) {
-            const killXp = [
-                ...(killXpByOwner.get(userId) || []),
-                ...(pveWinXpByOwner.get(userId) || [])
-            ];
+            const killXp = killXpByOwner.get(userId) || [];
+            const survivorXp = survivorXpByOwner.get(userId) || [];
 
             plan.set(userId, {
                 goldDelta: WINNER_GOLD_REWARD,
@@ -900,6 +899,7 @@ export class BattleSession {
                 victoriesDelta: 1,
                 defeatsDelta: 0,
                 killXp,
+                survivorXp,
                 removedHeroes: []
             });
         }
@@ -917,6 +917,7 @@ export class BattleSession {
                 victoriesDelta: 0,
                 defeatsDelta: 1,
                 killXp: killXpByOwner.get(userId) || [],
+                survivorXp: [],
                 removedHeroes: deadUnits.map(unit => ({
                     heroId: unit.heroId,
                     instanceId: unit.instanceId
@@ -950,8 +951,7 @@ export class BattleSession {
                 heroId: firstAliveUnit.heroId,
                 instanceId: firstAliveUnit.instanceId ?? null,
                 unitId: firstAliveUnit.id,
-                kills: 0,
-                killedUnitIds: [],
+                ...this.buildUnitNamePayload(firstAliveUnit),
                 xpDelta: PVE_WIN_XP_REWARD,
                 source: "pve_win"
             }]);
@@ -976,6 +976,7 @@ export class BattleSession {
                 heroId: killData.heroId,
                 instanceId: killData.instanceId,
                 unitId: killData.unitId,
+                ...this.buildRewardNamePayload(killData),
                 kills: killData.kills,
                 killedUnitIds: [...killData.killedUnitIds],
                 xpDelta: killData.kills * XP_PER_KILL
@@ -983,6 +984,23 @@ export class BattleSession {
         }
 
         return result;
+    }
+
+    buildRewardNamePayload(source = {}) {
+        const displayName = source.name ?? source.Name ?? source.HeroName ?? source.DisplayName ?? null;
+        if (!displayName) {
+            return {};
+        }
+
+        return {
+            Name: displayName,
+            HeroName: displayName,
+            DisplayName: displayName
+        };
+    }
+
+    buildUnitNamePayload(unit) {
+        return this.buildRewardNamePayload(unit);
     }
 
     collectAliveUnitsByOwner() {

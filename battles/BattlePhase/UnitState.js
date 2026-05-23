@@ -31,7 +31,7 @@ export class UnitState {
         this.instanceId = h.instanceId ?? h.InstanceId ?? null;
         this.ownerId = h.playerId ?? h.ownerId;
 
-        this.name = h.name;
+        this.name = h.name ?? h.Name ?? h.HeroName ?? h.DisplayName;
         this.gender = h.gender;
 
         this.hp = h.hp;
