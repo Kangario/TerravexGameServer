@@ -71,6 +71,54 @@ function createMultiKillSnapshot() {
     return snapshot;
 }
 
+function createPveWinSnapshot() {
+    return {
+        matchId: "pve-win",
+        mode: "PVE",
+        seed: 1,
+        terrain: { width: 15, height: 40 },
+        players: [
+            { userId: "u1", username: "Mike", teamId: 1, rating: 1500, level: 10 },
+            { userId: "bot:skelet", username: "Skelet", teamId: 2, isBot: true }
+        ],
+        units: [
+            {
+                heroId: 101,
+                instanceId: "hero-instance-101",
+                playerId: "u1",
+                team: 1,
+                hp: 100,
+                maxHp: 100,
+                ap: 4,
+                initiative: 10,
+                damageP: 100,
+                damageM: 0,
+                defenceP: 5,
+                defenceM: 2,
+                attackRange: 1,
+                moveCost: 1,
+                position: { x: 0, y: 0 }
+            },
+            {
+                heroId: 202,
+                playerId: "bot:skelet",
+                team: 2,
+                hp: 0,
+                maxHp: 50,
+                ap: 4,
+                initiative: 8,
+                damageP: 15,
+                damageM: 0,
+                defenceP: 5,
+                defenceM: 2,
+                attackRange: 1,
+                moveCost: 1,
+                position: { x: 1, y: 0 }
+            }
+        ]
+    };
+}
+
 describe("Battle end event contract", () => {
     test("fatal attack sends final damage before battle_end and includes deadUnitIds", () => {
         const session = new BattleSession(createSnapshot());
@@ -151,6 +199,30 @@ describe("Battle end event contract", () => {
             kills: 2,
             killedUnitIds: [202, 303],
             xpDelta: 100
+        }]);
+    });
+
+    test("pve win adds account xp reward for the surviving player character", () => {
+        const session = new BattleSession(createPveWinSnapshot());
+        session.contexPlayers = new Map([
+            ["u1", 1],
+            ["bot:skelet", 2]
+        ]);
+        session.state.winnerTeam = 1;
+
+        const plan = session.buildRewardsPlan({
+            winners: ["u1"],
+            losers: ["bot:skelet"]
+        });
+
+        expect(plan.get("u1").killXp).toEqual([{
+            heroId: 101,
+            instanceId: "hero-instance-101",
+            unitId: 101,
+            kills: 0,
+            killedUnitIds: [],
+            xpDelta: 50,
+            source: "pve_win"
         }]);
     });
 });

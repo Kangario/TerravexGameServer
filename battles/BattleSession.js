@@ -7,6 +7,7 @@ import { BattleRewardClient } from "./Rewards/BattleRewardClient.js";
 import { randomUUID } from "crypto";
 
 const XP_PER_KILL = 50;
+const PVE_WIN_XP_REWARD = 50;
 const WINNER_GOLD_REWARD = 100;
 const WINNER_RATING_REWARD = 100;
 const LOSER_RATING_PENALTY = 100;
@@ -884,10 +885,14 @@ export class BattleSession {
         const aliveUnitsByOwner = this.collectAliveUnitsByOwner();
         const allUnitsByOwner = this.collectAllUnitsByOwner();
         const killXpByOwner = this.collectKillXpByOwner();
+        const pveWinXpByOwner = this.collectPveWinXpByOwner(winners);
         const plan = new Map();
 
         for (const userId of winners) {
-            const killXp = killXpByOwner.get(userId) || [];
+            const killXp = [
+                ...(killXpByOwner.get(userId) || []),
+                ...(pveWinXpByOwner.get(userId) || [])
+            ];
 
             plan.set(userId, {
                 goldDelta: WINNER_GOLD_REWARD,
@@ -920,6 +925,39 @@ export class BattleSession {
         }
 
         return plan;
+    }
+
+    collectPveWinXpByOwner(winners) {
+        const result = new Map();
+
+        if ((this.snapshot.mode ?? "PVP") !== "PVE") {
+            return result;
+        }
+
+        for (const userId of winners) {
+            if (this.isServerControlledUser(userId)) {
+                continue;
+            }
+
+            const firstAliveUnit = this.getUnitsByOwner(userId)
+                .find((unit) => !CombatRules.isDead(unit));
+
+            if (!firstAliveUnit) {
+                continue;
+            }
+
+            result.set(userId, [{
+                heroId: firstAliveUnit.heroId,
+                instanceId: firstAliveUnit.instanceId ?? null,
+                unitId: firstAliveUnit.id,
+                kills: 0,
+                killedUnitIds: [],
+                xpDelta: PVE_WIN_XP_REWARD,
+                source: "pve_win"
+            }]);
+        }
+
+        return result;
     }
 
     collectKillXpByOwner() {
