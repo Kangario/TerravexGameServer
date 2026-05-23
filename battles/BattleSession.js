@@ -1,12 +1,11 @@
 import { BattleState } from "./BattlePhase/BattleState.js";
 import { TurnProcessor } from "./TurnController/TurnProcessor.js";
-import { userRedis } from "../config/redis.js";
 import { CombatRules } from "./CombatRules.js";
 import {BattleEventDispatcher} from "./Actions/BattleEventDispatcher.js";
 import {BattleActionProcessor} from "./Actions/BattleActionProcessor.js";
+import { BattleRewardClient } from "./Rewards/BattleRewardClient.js";
 import { randomUUID } from "crypto";
 
-const REWARDS_SERVER_URL = "https://terravexgamerewards-254547110109.europe-west1.run.app";
 const XP_PER_KILL = 50;
 const WINNER_GOLD_REWARD = 100;
 const WINNER_RATING_REWARD = 100;
@@ -53,6 +52,7 @@ export class BattleSession {
         this.deployment = {readyPlayers: new Set() };
         this.timer = null;
         this.finishedCallback = null;
+        this.rewardClient = new BattleRewardClient();
         this.battleResultSent = false;
         this.started = false;
         this.phaseTimerKind = null;
@@ -850,13 +850,11 @@ export class BattleSession {
             const reward = rewardsPlan.get(winnerId);
             if (!reward) continue;
 
-            tasks.push(this.applyRewardsToUserRedis(winnerId, reward));
-            tasks.push(this.createReward(winnerId, "battle_win", {
+            tasks.push(this.rewardClient.applyBattleReward(winnerId, "battle_win", {
                 matchId: this.snapshot.matchId,
                 winnerTeam: this.state.winnerTeam,
-                outcome: "win",
-                rewards: reward
-            }));
+                outcome: "win"
+            }, reward));
         }
 
         for (const loserId of losers) {
@@ -865,13 +863,11 @@ export class BattleSession {
             const reward = rewardsPlan.get(loserId);
             if (!reward) continue;
 
-            tasks.push(this.applyRewardsToUserRedis(loserId, reward));
-            tasks.push(this.createReward(loserId, "battle_loss", {
+            tasks.push(this.rewardClient.applyBattleReward(loserId, "battle_loss", {
                 matchId: this.snapshot.matchId,
                 winnerTeam: this.state.winnerTeam,
-                outcome: "lose",
-                rewards: reward
-            }));
+                outcome: "lose"
+            }, reward));
         }
 
         const results = await Promise.allSettled(tasks);
@@ -1011,123 +1007,6 @@ export class BattleSession {
         return `fallback:${JSON.stringify(unit)}`;
     }
 
-    async applyRewardsToUserRedis(userId, reward) {
-        const key = await this.resolveUserRedisKey(userId);
-        const raw = await userRedis.get(key);
-
-        if (!raw) {
-            throw new Error(`User ${userId} not found in userRedis by key ${key}`);
-        }
-
-        const user = JSON.parse(raw);
-
-        user.gold = Number(user.gold || 0) + Number(reward.goldDelta || 0);
-        user.rating = Number(user.rating || 0) + Number(reward.ratingDelta || 0);
-        user.victories = Number(user.victories || 0) + Number(reward.victoriesDelta || 0);
-        user.defeats = Number(user.defeats || 0) + Number(reward.defeatsDelta || 0);
-
-        const arraysToUpdate = ["equipmentHeroes", "heroesBought"];
-
-        for (const arrayName of arraysToUpdate) {
-            const heroes = Array.isArray(user[arrayName]) ? user[arrayName] : [];
-            const survivors = [];
-
-            for (const hero of heroes) {
-                if (this.isHeroRemoved(hero, reward.removedHeroes)) {
-                    continue;
-                }
-
-                const xpDelta = this.getHeroXpDelta(hero, reward.killXp);
-                if (xpDelta > 0) {
-                    hero.Xp = Number(hero.Xp || 0) + xpDelta;
-                }
-
-                survivors.push(hero);
-            }
-
-            user[arrayName] = survivors;
-        }
-
-        await userRedis.set(key, JSON.stringify(user));
-    }
-
-    async resolveUserRedisKey(userId) {
-        const candidates = [
-            userId,
-            `user:${userId}`,
-            `users:${userId}`,
-            `profile:${userId}`
-        ];
-
-        for (const key of candidates) {
-            if (!key) continue;
-
-            const exists = await userRedis.exists(key);
-            if (exists) {
-                return key;
-            }
-        }
-
-        return userId;
-    }
-
-    isHeroRemoved(hero, removedHeroes) {
-        return removedHeroes.some((removed) => {
-            const sameInstance =
-                removed.instanceId &&
-                (hero.InstanceId === removed.instanceId || hero.instanceId === removed.instanceId);
-
-            if (sameInstance) {
-                return true;
-            }
-
-            return removed.heroId !== null && removed.heroId !== undefined &&
-                (hero.Id === removed.heroId || hero.id === removed.heroId);
-        });
-    }
-
-    getHeroXpDelta(hero, heroXpRewards = []) {
-        for (const reward of heroXpRewards) {
-            const sameInstance =
-                reward.instanceId &&
-                (hero.InstanceId === reward.instanceId || hero.instanceId === reward.instanceId);
-
-            if (sameInstance) {
-                return reward.xpDelta;
-            }
-
-            if (reward.heroId !== null && reward.heroId !== undefined &&
-                (hero.Id === reward.heroId || hero.id === reward.heroId)) {
-                return reward.xpDelta;
-            }
-        }
-
-        return 0;
-    }
-    
-    
-    
-    async createReward(playerId, rewardType, payload) {
-        const response = await fetch(`${REWARDS_SERVER_URL}/rewards/create`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                playerId,
-                rewardType,
-                payload
-            })
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`Rewards server returned ${response.status}: ${errorBody}`);
-        }
-
-        return response.json();
-    }
-    
     // =========================
     // TURN FLOW
     // =========================
