@@ -920,7 +920,7 @@ export class BattleSession {
                 survivorXp: [],
                 removedHeroes: deadUnits.map(unit => ({
                     heroId: unit.heroId,
-                    instanceId: unit.instanceId
+                    instanceId: unit.heroId
                 }))
             });
         }
