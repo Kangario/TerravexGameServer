@@ -4,6 +4,8 @@ import { gsRedis, mmRedis } from "../config/redis.js";
 
 const activeBattles = new Map(); // matchId -> Battle
 const GS_QUEUE_MATCHES_KEY = process.env.GS_QUEUE_MATCHES_KEY || "gs:queue:matches";
+const CHARACTER_NOT_SELECTED_CODE = "character_not_selected";
+const CHARACTER_NOT_SELECTED_MESSAGE = "Персонаж не выбран";
 
 function log(...args) {
     console.log("[BattleManager]", ...args);
@@ -11,6 +13,61 @@ function log(...args) {
 
 function logErr(...args) {
     console.error("[BattleManager][ERROR]", ...args);
+}
+
+function hasValue(value) {
+    return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function sameId(left, right) {
+    return hasValue(left) && hasValue(right) && String(left) === String(right);
+}
+
+function unitOwnerId(unit) {
+    return unit?.playerId ?? unit?.ownerId ?? unit?.userId ?? null;
+}
+
+function hasCharacterIdentity(unit) {
+    return hasValue(unit?.instanceId ?? unit?.InstanceId)
+        || hasValue(unit?.heroId ?? unit?.id ?? unit?.Id);
+}
+
+function hasSelectedCharacter(snapshot, userId) {
+    if (!Array.isArray(snapshot?.units)) {
+        return false;
+    }
+
+    return snapshot.units.some((unit) => (
+        sameId(unitOwnerId(unit), userId) && hasCharacterIdentity(unit)
+    ));
+}
+
+function createCharacterNotSelectedError() {
+    const error = new Error(CHARACTER_NOT_SELECTED_MESSAGE);
+    error.code = CHARACTER_NOT_SELECTED_CODE;
+    return error;
+}
+
+function assertSelectedCharacter(snapshot, userId) {
+    if (!hasSelectedCharacter(snapshot, userId)) {
+        throw createCharacterNotSelectedError();
+    }
+}
+
+function sendToSocket(ws, payload) {
+    if (!ws || typeof ws.send !== "function") {
+        return;
+    }
+
+    ws.send(JSON.stringify(payload));
+}
+
+function sendCharacterNotSelected(ws) {
+    sendToSocket(ws, {
+        type: "error",
+        code: CHARACTER_NOT_SELECTED_CODE,
+        message: CHARACTER_NOT_SELECTED_MESSAGE
+    });
 }
 
 async function removeBattleFromRedis(matchId) {
@@ -48,14 +105,16 @@ async function removeBattleFromRedis(matchId) {
 
 export const BattleManager = {
 
-    async getOrCreateBattle(matchId) {
+    async getOrCreateBattle(matchId, options = {}) {
         let battle = activeBattles.get(matchId);
 
         if (battle) return battle;
 
         const snapshot = await loadBattleSnapshot(matchId);
+        options.validateSnapshot?.(snapshot);
 
         battle = await BattleSession.create(snapshot);
+        battle.snapshot ??= snapshot;
 
         battle.onFinished(async () => {
             activeBattles.delete(matchId);
@@ -84,7 +143,26 @@ export const BattleManager = {
     },
 
     async handleJoin(ws, msg) {
-        const battle = await this.getOrCreateBattle(msg.matchId);
+        let battle;
+
+        try {
+            battle = await this.getOrCreateBattle(msg.matchId, {
+                validateSnapshot: (snapshot) => assertSelectedCharacter(snapshot, msg.userId)
+            });
+
+            assertSelectedCharacter(battle.snapshot, msg.userId);
+        } catch (err) {
+            if (err?.code === CHARACTER_NOT_SELECTED_CODE) {
+                log("JOIN REJECTED: character not selected", {
+                    matchId: msg.matchId,
+                    userId: msg.userId
+                });
+                sendCharacterNotSelected(ws);
+                return;
+            }
+
+            throw err;
+        }
 
         battle.addPlayer(msg.userId, ws);
 

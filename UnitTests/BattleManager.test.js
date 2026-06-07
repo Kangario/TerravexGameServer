@@ -31,6 +31,23 @@ jest.unstable_mockModule("../config/redis.js", () => ({
 let BattleManager;
 let battle;
 
+function createSnapshot(matchId) {
+    const userIds = ["u1", "u2", "u3", "u5", "u6", "u7", "u9"];
+
+    return {
+        matchId,
+        players: userIds.map((userId, index) => ({
+            userId,
+            teamId: index + 1
+        })),
+        units: userIds.map((userId, index) => ({
+            heroId: 100 + index,
+            playerId: userId,
+            team: index + 1
+        }))
+    };
+}
+
 beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
@@ -44,7 +61,7 @@ beforeEach(async () => {
         startBattle: jest.fn()
     };
 
-    loadBattleSnapshot.mockResolvedValue({ matchId: "m1" });
+    loadBattleSnapshot.mockImplementation((matchId) => createSnapshot(matchId));
     mockCreate.mockResolvedValue(battle);
     gsRedis.type.mockResolvedValue("none");
     gsRedis.del.mockResolvedValue(1);
@@ -97,6 +114,39 @@ test("handleJoin attaches player and starts battle once battle exists", async ()
     expect(ws.matchId).toBe("m3");
     expect(ws.userId).toBe("u3");
     expect(ws.sessionToken).toBe("server-token");
+});
+
+test("handleJoin rejects when user has no selected character", async () => {
+    loadBattleSnapshot.mockResolvedValueOnce({
+        matchId: "m-no-character",
+        players: [
+            { userId: "u10", teamId: 1 },
+            { userId: "u11", teamId: 2 }
+        ],
+        units: [
+            { heroId: 201, playerId: "u11", team: 2 }
+        ]
+    });
+
+    const ws = {
+        send: jest.fn()
+    };
+
+    await BattleManager.handleJoin(ws, {
+        matchId: "m-no-character",
+        userId: "u10"
+    });
+
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(battle.addPlayer).not.toHaveBeenCalled();
+    expect(battle.startBattle).not.toHaveBeenCalled();
+    expect(ws.matchId).toBeUndefined();
+    expect(ws.userId).toBeUndefined();
+    expect(ws.send).toHaveBeenCalledWith(JSON.stringify({
+        type: "error",
+        code: "character_not_selected",
+        message: "Персонаж не выбран"
+    }));
 });
 
 test("handleReconnect passes session token and rebinds socket on success", async () => {
