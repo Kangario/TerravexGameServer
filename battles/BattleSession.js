@@ -854,6 +854,7 @@ export class BattleSession {
 
             tasks.push(this.rewardClient.applyBattleReward(winnerId, "battle_win", {
                 matchId: this.snapshot.matchId,
+                mode: this.snapshot.mode ?? "PVP",
                 winnerTeam: this.state.winnerTeam,
                 outcome: "win"
             }, reward));
@@ -867,6 +868,7 @@ export class BattleSession {
 
             tasks.push(this.rewardClient.applyBattleReward(loserId, "battle_loss", {
                 matchId: this.snapshot.matchId,
+                mode: this.snapshot.mode ?? "PVP",
                 winnerTeam: this.state.winnerTeam,
                 outcome: "lose"
             }, reward));
@@ -887,21 +889,27 @@ export class BattleSession {
         const allUnitsByOwner = this.collectAllUnitsByOwner();
         const killXpByOwner = this.collectKillXpByOwner();
         const survivorXpByOwner = this.collectPveWinXpByOwner(winners);
+        const shouldAwardRating = !this.isPveBattle();
         const plan = new Map();
 
         for (const userId of winners) {
             const killXp = killXpByOwner.get(userId) || [];
             const survivorXp = survivorXpByOwner.get(userId) || [];
 
-            plan.set(userId, {
+            const reward = {
                 goldDelta: WINNER_GOLD_REWARD,
-                ratingDelta: WINNER_RATING_REWARD,
                 victoriesDelta: 1,
                 defeatsDelta: 0,
                 killXp,
                 survivorXp,
                 removedHeroes: []
-            });
+            };
+
+            if (shouldAwardRating) {
+                reward.ratingDelta = WINNER_RATING_REWARD;
+            }
+
+            plan.set(userId, reward);
         }
 
         for (const userId of losers) {
@@ -911,9 +919,8 @@ export class BattleSession {
 
             const deadUnits = allUnits.filter(unit => !aliveKeys.has(unit.identityKey));
 
-            plan.set(userId, {
+            const reward = {
                 goldDelta: 0,
-                ratingDelta: -LOSER_RATING_PENALTY,
                 victoriesDelta: 0,
                 defeatsDelta: 1,
                 killXp: killXpByOwner.get(userId) || [],
@@ -922,10 +929,20 @@ export class BattleSession {
                     heroId: unit.heroId,
                     instanceId: unit.instanceId
                 }))
-            });
+            };
+
+            if (shouldAwardRating) {
+                reward.ratingDelta = -LOSER_RATING_PENALTY;
+            }
+
+            plan.set(userId, reward);
         }
 
         return plan;
+    }
+
+    isPveBattle() {
+        return (this.snapshot.mode ?? "PVP") === "PVE";
     }
 
     collectPveWinXpByOwner(winners) {

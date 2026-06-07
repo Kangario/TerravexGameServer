@@ -221,6 +221,8 @@ describe("Battle end event contract", () => {
         });
 
         expect(plan.get("u1").killXp).toEqual([]);
+        expect(plan.get("u1")).not.toHaveProperty("ratingDelta");
+        expect(plan.get("bot:skelet")).not.toHaveProperty("ratingDelta");
         expect(plan.get("u1").survivorXp).toEqual([{
             heroId: 101,
             instanceId: "hero-instance-101",
